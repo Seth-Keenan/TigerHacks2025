@@ -17,7 +17,9 @@ typedef enum {
     MISSION,
     GAMEOVER,
     PAUSE,
-    QUIT
+    QUIT,
+    INSTRUCTIONS,
+    START
 } GameState;
 
 // optional, but you already had it

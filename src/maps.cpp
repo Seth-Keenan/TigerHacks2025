@@ -13,6 +13,7 @@ TILE LEGEND:
 7 - shooter enemy spawn (DOWN)
 8 - shooter enemy spawn (LEFT)
 9 - boss enemy spawn
+10 - key tile
 */
 
 static int earthMap0[MAP_HEIGHT][MAP_WIDTH] = {
@@ -53,7 +54,7 @@ static int earthMap1[MAP_HEIGHT][MAP_WIDTH] = {
     {1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,0,0,1,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,1,0,3,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,1,0,3,0,1,1,0,0,0,0,0,0,9,0,0,0,0,0,0,0,0,1},
     {1,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
@@ -160,6 +161,18 @@ extern int gFloor;
 int (*GetCurrentMap(void))[MAP_WIDTH]
 {
     return GetMapForFloor(gFloor);
+}
+
+bool Map_HasBossTile(int (*map)[MAP_WIDTH])
+{
+    for (int y = 0; y < MAP_HEIGHT; y++) {
+        for (int x = 0; x < MAP_WIDTH; x++) {
+            if (map[y][x] == 9) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool Map_FindKeyTile(int (*map)[MAP_WIDTH], float *outX, float *outY)

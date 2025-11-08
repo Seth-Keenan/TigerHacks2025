@@ -59,6 +59,8 @@ typedef struct Enemy {
     bool isShooter;
     bool isBoss;
     int shootTimer;
+    int health;      
+    int maxHealth;
 } Enemy;
 
 typedef struct Room {
@@ -211,9 +213,27 @@ static void UpdatePause(void);
 static void DrawPause(void);
 static void UpdateQuit(void);
 static void DrawQuit(void);
+static void UpdateInstructions(void);
+static void DrawInstructions(void);
+static void UpdateStart(void);
+static void DrawStart(void);
 static bool IsTileSolid(int tx, int ty);
 static bool GetRandomFreeTilePos(float *outX, float *outY);
 static bool FindTileOfType(int tileValue, float *outX, float *outY);
+static void ResetToFloor1KeepMoney(void);
+
+static void HandlePickup(Pickup *p)
+{
+    if (!p) return;
+    p->active = false;
+
+    switch (p->type) {
+        case HEALTH: player.health += 1; break;
+        case AMMO:   player.ammo   += 5; break;
+        case MONEY:  player.currency += 10; break;
+        case POWERUP: /*todo*/ break;
+    }
+}
 
 void InitGame(int screenWidth, int screenHeight)
 {
@@ -221,44 +241,71 @@ void InitGame(int screenWidth, int screenHeight)
     gScreenHeight = screenHeight;
 
     InitPlayerOnce();
-    gState = STATION;
+    gState = START;
 }
 
 void GameUpdateDraw(void)
 {
     switch (gState) {
+        case START:
+            UpdateStart();
+            break;
         case STATION:
             UpdateStation();
-            DrawStation();
             break;
         case SHOP:
             UpdateShop();
-            DrawShop();
             break;
         case MISSION:
             UpdateGame();
-            DrawGame();
             break;
         case PAUSE:
             UpdatePause();
-            DrawPause();
             break;
         case QUIT:
             UpdateQuit();
+            break;
+        case INSTRUCTIONS:
+            UpdateInstructions();
+            break;
+        case GAMEOVER:
+            if (IsKeyPressed(KEY_ENTER)) {
+                ResetToFloor1KeepMoney();
+            }
+            break;
+    }
+
+    switch (gState) {
+        case START:
+            DrawStart();
+            break;
+        case STATION:
+            DrawStation();
+            break;
+        case SHOP:
+            DrawShop();
+            break;
+        case MISSION:
+            DrawGame();
+            break;
+        case PAUSE:
+            DrawPause();
+            break;
+        case QUIT:
             DrawQuit();
+            break;
+        case INSTRUCTIONS:
+            DrawInstructions();
             break;
         case GAMEOVER:
             BeginDrawing();
             ClearBackground(BLACK);
             DrawText("GAME OVER - press ENTER for station", 80, 200, 20, RAYWHITE);
             EndDrawing();
-            if (IsKeyPressed(KEY_ENTER)) {
-                gState = STATION;
-                player.health = 3;
-            }
             break;
     }
 }
+
 
 void GameUnload(void)
 {
@@ -309,6 +356,38 @@ static void EnemyFireBullets(Enemy &e, int count)
     }
 }
 
+// boss fires bullets in a circle
+static void BossFireCircle(Enemy &e)
+{
+    const int bullets = 12;            // 12-way spread
+    const float speed = 4.0f;
+
+    float cx = e.rec.x + e.rec.width  * 0.5f;
+    float cy = e.rec.y + e.rec.height * 0.5f;
+
+    for (int b = 0; b < bullets; b++) {
+        float angle = (2.0f * PI * b) / bullets;
+        float vx = cosf(angle) * speed;
+        float vy = sinf(angle) * speed;
+
+        for (int i = 0; i < NUM_SHOOTS; i++) {
+            if (!shoot[i].active) {
+                shoot[i].active = true;
+                shoot[i].fromPlayer = false;
+                shoot[i].color = RED;
+                shoot[i].rec.width = 10;
+                shoot[i].rec.height = 10;
+                shoot[i].rec.x = cx;
+                shoot[i].rec.y = cy;
+                shoot[i].speed.x = vx;
+                shoot[i].speed.y = vy;
+                shoot[i].facing = RIGHT;
+                break;
+            }
+        }
+    }
+}
+
 static void InitPlayerOnce(void)
 {
     player.rec.x =  90;
@@ -346,8 +425,11 @@ static void InitMission(void)
         gKeyPos.x = kx;
         gKeyPos.y = ky;
     } else {
-        // fallback
-        gKeyPos = { 22 * TILE_SIZE + 8, 17 * TILE_SIZE + 8 };
+        if (!Map_HasBossTile(currMap)) {
+            gKeyPos = { 22 * TILE_SIZE + 8, 17 * TILE_SIZE + 8 };
+        } else {
+            gKeyPos = { -1000.0f, -1000.0f };
+        }
     }
 
     // bullets
@@ -402,7 +484,10 @@ static void InitMission(void)
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemies[i].active = false;
         enemies[i].isShooter = false;
+        enemies[i].isBoss = false;
         enemies[i].shootTimer = 0;
+        enemies[i].health = 1;
+        enemies[i].maxHealth = 1;
     }
 
     int enemyIndex = 0;
@@ -453,14 +538,50 @@ static void InitMission(void)
                         enemies[enemyIndex].facing = LEFT;  
                         break;
                 }
-
+                
+                enemyIndex++;
+            }
+            else if (t == 9) {
+                enemies[enemyIndex].rec.x = x * TILE_SIZE + (TILE_SIZE - 80) * 0.5f;
+                enemies[enemyIndex].rec.y = y * TILE_SIZE + (TILE_SIZE - 80) * 0.5f;
+                enemies[enemyIndex].rec.width  = 80;
+                enemies[enemyIndex].rec.height = 80;
+                enemies[enemyIndex].speed = {1.2f, 1.2f};  // slow
+                enemies[enemyIndex].color = (Color){180, 30, 30, 255};
+                enemies[enemyIndex].facing = DOWN;
+                enemies[enemyIndex].active = true;
+                enemies[enemyIndex].isShooter = true;      
+                enemies[enemyIndex].isBoss = true;
+                enemies[enemyIndex].shootTimer = 120;      
+                enemies[enemyIndex].health = 40;
+                enemies[enemyIndex].maxHealth = 40;
                 enemyIndex++;
             }
         }
     }
 }
 
-static void UpdateGame(void) {
+static void ResetToFloor1KeepMoney(void)
+{
+    int savedMoney = player.currency;
+
+    gFloor = 1;
+    gHasKey = false;
+    player.health = 3;
+    player.ammo   = 50;
+    player.iframes = 0;
+    gBulletSpeed = 7;
+    gFireDelay   = 20;
+
+    player.currency = savedMoney;
+
+    InitMission();
+
+    gState = STATION;
+}
+
+static void UpdateGame(void) 
+{
     int (*currMap)[MAP_WIDTH] = GetCurrentMap();
     
     if (IsKeyPressed(KEY_ESCAPE) && gState == MISSION) {
@@ -560,10 +681,6 @@ static void UpdateGame(void) {
     int tx = (int)(px / TILE_SIZE);
     int ty = (int)(py / TILE_SIZE);
 
-    if (!gHasKey) {
-        // you can optionally draw "need key" somewhere, but logic is enough
-    }
-
     if (gHasKey && !Map_IsTileSolid(currMap, tx, ty)) {
         int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
         int t = currentMap[ty][tx];
@@ -573,7 +690,6 @@ static void UpdateGame(void) {
             player.currency += 5;
         }
     }
-
 
     if (IsKeyDown(KEY_RIGHT)) player.facing = RIGHT;
     if (IsKeyDown(KEY_LEFT))  player.facing = LEFT;
@@ -718,6 +834,7 @@ static void UpdateGame(void) {
     
                     if (player.health <= 0) {
                         gState = GAMEOVER;
+                        return;
                     }
                 }
             }
@@ -740,8 +857,37 @@ static void UpdateGame(void) {
 
             if (CheckCollisionCircleRec(enemyCenter, enemies[i].rec.width/2, shoot[j].rec)) {
                 shoot[j].active = false;
-                enemies[i].active = false;
-                player.currency += 5;
+
+            if (enemies[i].isBoss) {
+                    enemies[i].health -= 1;
+                    if (enemies[i].health <= 0) {
+                        enemies[i].active = false;
+                        player.currency += 50;   
+                        gHasKey = true;          
+                    }
+                } else {
+                    enemies[i].active = false;
+                    player.currency += 5;
+                }
+            }
+        }
+
+            // BOSS SPECIAL LOGIC
+        if (enemies[i].isBoss) {
+            if (enemies[i].shootTimer > 0) {
+                enemies[i].shootTimer--;
+            } else {
+                BossFireCircle(enemies[i]);
+                enemies[i].shootTimer = 150;
+            }
+        } else {
+            if (enemies[i].isShooter) {
+                if (enemies[i].shootTimer > 0) {
+                    enemies[i].shootTimer--;
+                } else {
+                    EnemyFireBullets(enemies[i], 5);
+                    enemies[i].shootTimer = 180;
+                }
             }
         }
     }
@@ -830,12 +976,18 @@ static void UpdateGame(void) {
                     // death check
                     if (player.health <= 0) {
                         gState = GAMEOVER;
+                        return;
                     }
                 } else {
                     shoot[i].active = false;
                 }
             }
         }
+    }
+
+    if (player.ammo <= 0 || player.health <= 0) {
+        gState = GAMEOVER;
+        return;
     }
 
     if (player.iframes > 0) player.iframes--;
@@ -881,6 +1033,23 @@ static void DrawGame(void)
     
     snprintf(buf, sizeof(buf), "Floor: %d", gFloor);
     DrawText(buf, 10, 130, 20, DARKGRAY);
+
+    // draw boss HP bar (first active boss we find)
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (enemies[i].active && enemies[i].isBoss) {
+            float barW = 400;
+            float barH = 20;
+            float x = (gScreenWidth - barW) * 0.5f;
+            float y = 560; // near bottom, or put at 10
+
+            DrawRectangle(x, y, barW, barH, DARKGRAY);
+            float pct = (float)enemies[i].health / (float)enemies[i].maxHealth;
+            DrawRectangle(x, y, barW * pct, barH, RED);
+            DrawRectangleLines(x, y, barW, barH, BLACK);
+            DrawText("BOSS", x, y - 20, 20, RED);
+            break;
+        }
+    }
 
     EndDrawing();
 }
@@ -953,18 +1122,7 @@ static void DrawPlayer(const Player& player)
     DrawTriangle(p1, p3, p2, YELLOW);
 }
 
-static void HandlePickup(Pickup *p)
-{
-    if (!p) return;
-    p->active = false;
 
-    switch (p->type) {
-        case HEALTH: player.health += 1; break;
-        case AMMO:   player.ammo   += 5; break;
-        case MONEY:  player.currency += 10; break;
-        case POWERUP: /*todo*/ break;
-    }
-}
 
 static void DrawStation(void)
 {
@@ -988,11 +1146,10 @@ static void UpdateStation(void)
         gState = SHOP;
     }
     if (IsKeyPressed(KEY_TWO)) {
-        InitMission();
-        gState = MISSION;
+        gState = INSTRUCTIONS;
     }
     if(IsKeyPressed(KEY_ESCAPE)) {
-        gState = QUIT;
+        gState = START;
     }
 }
 
@@ -1067,8 +1224,6 @@ static void DrawShop(void)
     EndDrawing();
 }
 
-
-
 static void UpdatePause(void)
 {
     if (IsKeyPressed(KEY_ESCAPE)) {
@@ -1095,7 +1250,7 @@ static void DrawPause(void)
 static void UpdateQuit(void)
 {
     if (IsKeyPressed(KEY_ESCAPE)) {
-        gState = STATION;
+        gState = START;
     }
 
     if (IsKeyPressed(KEY_ENTER)) {
@@ -1112,6 +1267,83 @@ static void DrawQuit(void)
     DrawText("QUIT", gScreenWidth/2 - 80, gScreenHeight/2 - 80, 40, RAYWHITE);
     DrawText("Press ESC to resume", gScreenWidth/2 - 120, gScreenHeight/2, 20, GRAY);
     DrawText("Press ENTER to quit the game", gScreenWidth/2 - 170, gScreenHeight/2 + 40, 20, GRAY);
+
+    EndDrawing();
+}
+
+static void UpdateInstructions(void)
+{
+    // Any key press starts the game
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ONE))
+    {
+        InitMission();
+        gState = MISSION;
+    }
+}
+
+static void DrawInstructions(void)
+{
+    BeginDrawing();
+    ClearBackground((Color){5, 8, 20, 255});
+
+    DrawText("HOW TO PLAY", gScreenWidth/2 - 100, 60, 40, GOLD);
+
+    int x = 80;
+    int y = 140;
+    int line = 30;
+
+    DrawText("WASD  - Move your ship", x, y, 20, RAYWHITE);
+    DrawText("Arrow Keys - Aim direction", x, y + line, 20, RAYWHITE);
+    DrawText("SPACE - Shoot (uses ammo)", x, y + line*2, 20, RAYWHITE);
+    DrawText("Collect BLUE for ammo", x, y + line*3, 20, SKYBLUE);
+    DrawText("Collect YELLOW for money", x, y + line*4, 20, YELLOW);
+    DrawText("Get the GOLD key to use the teleporter", x, y + line*5, 20, GOLD);
+    DrawText("Avoid RED bullets and enemies!", x, y + line*6, 20, RED);
+    DrawText("If you run out of ammo OR run out of HP,", x, y + line*7, 20, RAYWHITE);
+    DrawText("you restart at Floor 1 with only your money!", x, y + line*8, 20, RAYWHITE);
+    DrawText("Press ENTER to begin your mission", gScreenWidth/2 - 180, y + line*10, 20, GRAY);
+
+    EndDrawing();
+}
+
+static void UpdateStart(void)
+{
+    // ENTER starts the game, you could also allow SPACE
+    if (IsKeyPressed(KEY_ENTER))
+    {
+        gState = STATION;   // go to your hub
+    }
+
+    if (IsKeyPressed(KEY_ESCAPE))
+    {
+        gState = QUIT;
+    }
+}
+
+static void DrawStart(void)
+{
+    BeginDrawing();
+    ClearBackground((Color){ 6, 9, 20, 255 });
+
+    // Title
+    const char *title = "SPACE STATION STRIKER"; // change to your game name
+    int titleFont = 40;
+    int titleWidth = MeasureText(title, titleFont);
+    DrawText(title, gScreenWidth/2 - titleWidth/2, 120, titleFont, RAYWHITE);
+
+    // Subtitle
+    const char *sub = "Top-down missions, credits, upgrades.";
+    int subFont = 20;
+    int subWidth = MeasureText(sub, subFont);
+    DrawText(sub, gScreenWidth/2 - subWidth/2, 180, subFont, GRAY);
+
+    // Instructions
+    DrawText("Press ENTER to start", gScreenWidth/2 - 130, 280, 24, GOLD);
+    DrawText("Press ESC to quit",   gScreenWidth/2 - 100, 320, 20, GRAY);
+
+    // Optional: quick controls preview
+    DrawText("WASD to move  |  Arrows to aim  |  SPACE to shoot", 
+             gScreenWidth/2 - 240, 380, 18, (Color){180, 180, 200, 255});
 
     EndDrawing();
 }

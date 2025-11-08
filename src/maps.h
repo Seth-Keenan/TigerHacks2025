@@ -13,6 +13,7 @@ int (*GetMapByIndex(int index))[MAP_WIDTH];
 int (*GetMapForFloor(int floor))[MAP_WIDTH];
 int (*GetCurrentMap(void))[MAP_WIDTH];
 
+bool Map_HasBossTile(int (*map)[MAP_WIDTH]);
 bool Map_FindTile(int (*map)[MAP_WIDTH], int tileValue, float *outX, float *outY);
 int  Map_FindAllTiles(int (*map)[MAP_WIDTH], int tileValue, Vector2 *outPositions, int maxOut);
 bool Map_FindKeyTile(int (*map)[MAP_WIDTH], float *outX, float *outY);
