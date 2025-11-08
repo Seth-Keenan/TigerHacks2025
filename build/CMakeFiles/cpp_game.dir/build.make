@@ -53,10 +53,10 @@ RM = /opt/homebrew/Cellar/cmake/3.30.4/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/sef/src/cpp_game
+CMAKE_SOURCE_DIR = /Users/sef/src/TigerHacks2025
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/sef/src/cpp_game/build
+CMAKE_BINARY_DIR = /Users/sef/src/TigerHacks2025/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/cpp_game.dir/depend.make
@@ -70,31 +70,47 @@ include CMakeFiles/cpp_game.dir/progress.make
 include CMakeFiles/cpp_game.dir/flags.make
 
 CMakeFiles/cpp_game.dir/src/main.cpp.o: CMakeFiles/cpp_game.dir/flags.make
-CMakeFiles/cpp_game.dir/src/main.cpp.o: /Users/sef/src/cpp_game/src/main.cpp
+CMakeFiles/cpp_game.dir/src/main.cpp.o: /Users/sef/src/TigerHacks2025/src/main.cpp
 CMakeFiles/cpp_game.dir/src/main.cpp.o: CMakeFiles/cpp_game.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sef/src/cpp_game/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/cpp_game.dir/src/main.cpp.o"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/cpp_game.dir/src/main.cpp.o -MF CMakeFiles/cpp_game.dir/src/main.cpp.o.d -o CMakeFiles/cpp_game.dir/src/main.cpp.o -c /Users/sef/src/cpp_game/src/main.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sef/src/TigerHacks2025/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/cpp_game.dir/src/main.cpp.o"
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/cpp_game.dir/src/main.cpp.o -MF CMakeFiles/cpp_game.dir/src/main.cpp.o.d -o CMakeFiles/cpp_game.dir/src/main.cpp.o -c /Users/sef/src/TigerHacks2025/src/main.cpp
 
 CMakeFiles/cpp_game.dir/src/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/cpp_game.dir/src/main.cpp.i"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/sef/src/cpp_game/src/main.cpp > CMakeFiles/cpp_game.dir/src/main.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/sef/src/TigerHacks2025/src/main.cpp > CMakeFiles/cpp_game.dir/src/main.cpp.i
 
 CMakeFiles/cpp_game.dir/src/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/cpp_game.dir/src/main.cpp.s"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/sef/src/cpp_game/src/main.cpp -o CMakeFiles/cpp_game.dir/src/main.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/sef/src/TigerHacks2025/src/main.cpp -o CMakeFiles/cpp_game.dir/src/main.cpp.s
+
+CMakeFiles/cpp_game.dir/src/game.cpp.o: CMakeFiles/cpp_game.dir/flags.make
+CMakeFiles/cpp_game.dir/src/game.cpp.o: /Users/sef/src/TigerHacks2025/src/game.cpp
+CMakeFiles/cpp_game.dir/src/game.cpp.o: CMakeFiles/cpp_game.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sef/src/TigerHacks2025/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/cpp_game.dir/src/game.cpp.o"
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/cpp_game.dir/src/game.cpp.o -MF CMakeFiles/cpp_game.dir/src/game.cpp.o.d -o CMakeFiles/cpp_game.dir/src/game.cpp.o -c /Users/sef/src/TigerHacks2025/src/game.cpp
+
+CMakeFiles/cpp_game.dir/src/game.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/cpp_game.dir/src/game.cpp.i"
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/sef/src/TigerHacks2025/src/game.cpp > CMakeFiles/cpp_game.dir/src/game.cpp.i
+
+CMakeFiles/cpp_game.dir/src/game.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/cpp_game.dir/src/game.cpp.s"
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/sef/src/TigerHacks2025/src/game.cpp -o CMakeFiles/cpp_game.dir/src/game.cpp.s
 
 # Object files for target cpp_game
 cpp_game_OBJECTS = \
-"CMakeFiles/cpp_game.dir/src/main.cpp.o"
+"CMakeFiles/cpp_game.dir/src/main.cpp.o" \
+"CMakeFiles/cpp_game.dir/src/game.cpp.o"
 
 # External object files for target cpp_game
 cpp_game_EXTERNAL_OBJECTS =
 
 cpp_game: CMakeFiles/cpp_game.dir/src/main.cpp.o
+cpp_game: CMakeFiles/cpp_game.dir/src/game.cpp.o
 cpp_game: CMakeFiles/cpp_game.dir/build.make
 cpp_game: /opt/homebrew/opt/raylib/lib/libraylib.dylib
 cpp_game: CMakeFiles/cpp_game.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/sef/src/cpp_game/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable cpp_game"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/sef/src/TigerHacks2025/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable cpp_game"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/cpp_game.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -106,6 +122,6 @@ CMakeFiles/cpp_game.dir/clean:
 .PHONY : CMakeFiles/cpp_game.dir/clean
 
 CMakeFiles/cpp_game.dir/depend:
-	cd /Users/sef/src/cpp_game/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/sef/src/cpp_game /Users/sef/src/cpp_game /Users/sef/src/cpp_game/build /Users/sef/src/cpp_game/build /Users/sef/src/cpp_game/build/CMakeFiles/cpp_game.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /Users/sef/src/TigerHacks2025/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/sef/src/TigerHacks2025 /Users/sef/src/TigerHacks2025 /Users/sef/src/TigerHacks2025/build /Users/sef/src/TigerHacks2025/build /Users/sef/src/TigerHacks2025/build/CMakeFiles/cpp_game.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/cpp_game.dir/depend
 

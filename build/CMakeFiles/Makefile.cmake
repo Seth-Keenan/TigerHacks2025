@@ -7,7 +7,7 @@ set(CMAKE_DEPENDS_GENERATOR "Unix Makefiles")
 # The top level Makefile was generated from the following files:
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
-  "/Users/sef/src/cpp_game/CMakeLists.txt"
+  "/Users/sef/src/TigerHacks2025/CMakeLists.txt"
   "CMakeFiles/3.30.4/CMakeCCompiler.cmake"
   "CMakeFiles/3.30.4/CMakeCXXCompiler.cmake"
   "CMakeFiles/3.30.4/CMakeSystem.cmake"
