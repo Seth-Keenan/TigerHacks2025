@@ -1,4 +1,5 @@
 #include "game.h"
+#include "maps.h"
 #include <cstdio>
 #include <cmath>
 
@@ -6,17 +7,6 @@
 #if defined(PLATFORM_WEB)
     #include <emscripten/emscripten.h>
 #endif
-
-// Definitions
-#define NUM_SHOOTS 100
-#define MAX_PICKUPS 10
-#define MAX_ENEMIES 5
-#define TILE_SIZE   32
-#define MAP_WIDTH   25
-#define MAP_HEIGHT  23
-#define MAX_ROOMS_PER_FLOOR 8
-
-
 
 typedef enum {
     UP,
@@ -49,6 +39,7 @@ typedef struct Shoot {
     bool active;
     Color color;
     FacingDirection facing;
+    bool fromPlayer;
 } Shoot;
 
 typedef struct Pickup {
@@ -65,6 +56,9 @@ typedef struct Enemy {
     Color color;
     FacingDirection facing;
     bool active;
+    bool isShooter;
+    bool isBoss;
+    int shootTimer;
 } Enemy;
 
 typedef struct Room {
@@ -73,9 +67,112 @@ typedef struct Room {
     bool isBoss;
 } Room;
 
-// --------------------
-// statics / globals for this translation unit
-// --------------------
+class BouncerEnemy {
+    public:
+        Rectangle rec{};
+        Vector2 speed{};
+        Color color{RED};
+        bool active{false};
+
+        void Init(float x, float y, float vx = 2.0f, float vy = 2.0f, Color c = RED) {
+            rec.x = x;
+            rec.y = y;
+            rec.width = 20;
+            rec.height = 20;
+            speed.x = vx;
+            speed.y = vy;
+            color = c;
+            active = true;
+        }
+
+        // map is [MAP_HEIGHT][MAP_WIDTH]
+        void Update(int (*map)[MAP_WIDTH], int screenW, int screenH) {
+            if (!active) return;
+
+            // --- X move ---
+            float newEx = rec.x + speed.x;
+            {
+                float left   = newEx;
+                float right  = newEx + rec.width;
+                float top    = rec.y;
+                float bottom = rec.y + rec.height;
+
+                int txL = (int)(left   / TILE_SIZE);
+                int txR = (int)(right  / TILE_SIZE);
+                int tyT = (int)(top    / TILE_SIZE);
+                int tyB = (int)(bottom / TILE_SIZE);
+
+                bool blocked = false;
+                for (int ty = tyT; ty <= tyB; ty++) {
+                    for (int tx = txL; tx <= txR; tx++) {
+                        if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) {
+                            blocked = true;
+                            break;
+                        }
+                        if (map[ty][tx] == 1) { // wall
+                            blocked = true;
+                            break;
+                        }
+                    }
+                    if (blocked) break;
+                }
+
+                if (!blocked) {
+                    rec.x = newEx;
+                } else {
+                    speed.x *= -1;
+                }
+            }
+
+            // --- Y move ---
+            float newEy = rec.y + speed.y;
+            {
+                float left   = rec.x;
+                float right  = rec.x + rec.width;
+                float top    = newEy;
+                float bottom = newEy + rec.height;
+
+                int txL = (int)(left   / TILE_SIZE);
+                int txR = (int)(right  / TILE_SIZE);
+                int tyT = (int)(top    / TILE_SIZE);
+                int tyB = (int)(bottom / TILE_SIZE);
+
+                bool blocked = false;
+                for (int ty = tyT; ty <= tyB; ty++) {
+                    for (int tx = txL; tx <= txR; tx++) {
+                        if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) {
+                            blocked = true;
+                            break;
+                        }
+                        if (map[ty][tx] == 1) {
+                            blocked = true;
+                            break;
+                        }
+                    }
+                    if (blocked) break;
+                }
+
+                if (!blocked) {
+                    rec.y = newEy;
+                } else {
+                    speed.y *= -1;
+                }
+            }
+
+            // screen clamp bounce (optional)
+            if (rec.x < 0) { rec.x = 0; speed.x *= -1; }
+            if (rec.x + rec.width > screenW) {
+                rec.x = screenW - rec.width;
+                speed.x *= -1;
+            }
+            if (rec.y < 0) { rec.y = 0; speed.y *= -1; }
+            if (rec.y + rec.height > screenH) {
+                rec.y = screenH - rec.height;
+                speed.y *= -1;
+            }
+        }
+};
+
 static int gScreenWidth  = 800;
 static int gScreenHeight = 600;
 
@@ -83,39 +180,21 @@ static Player player = { 0 };
 static Shoot shoot[NUM_SHOOTS] = { 0 };
 static Pickup pickups[MAX_PICKUPS] = { 0 };
 static Enemy enemies[MAX_ENEMIES] = { 0 };
+
 static int shootRate = 0;
+static int gBulletSpeed = 7;   
+static int gFireDelay   = 20;  
+
 static GameState gState = STATION;
-static int gFloor = 1;
+
+int gFloor = 1;
 static int gCurrentRoom = 0;
 static int gRoomsOnFloor = 0;
 static Room gRooms[MAX_ROOMS_PER_FLOOR];
 
-static bool gHasKey = false; 
-static Vector2 gKeyPos = { 21 * TILE_SIZE + 8, 18 * TILE_SIZE + 8 }; 
-static float   gKeyRadius = 10.0f;
-
-
-static int earthMap[MAP_HEIGHT][MAP_WIDTH] = {
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1},
-    {1,0,0,0,0,0,0,1,1,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-};
+static bool gHasKey = false;
+static float gKeyRadius = 10.0f;
+static Vector2 gKeyPos = { 22 * TILE_SIZE + 8, 17 * TILE_SIZE + 8 };
 
 static void InitPlayerOnce(void);
 static void InitMission(void);
@@ -134,6 +213,7 @@ static void UpdateQuit(void);
 static void DrawQuit(void);
 static bool IsTileSolid(int tx, int ty);
 static bool GetRandomFreeTilePos(float *outX, float *outY);
+static bool FindTileOfType(int tileValue, float *outX, float *outY);
 
 void InitGame(int screenWidth, int screenHeight)
 {
@@ -185,29 +265,48 @@ void GameUnload(void)
     // if you load textures/sounds later, unload here
 }
 
-// Helpers for tile logic
-static bool IsTileSolid(int tx, int ty) {
-    if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) return true;
-    int t = earthMap[ty][tx];
-    return (t == 1);  // walls block
-}
-
-static bool GetRandomFreeTilePos(float *outX, float *outY)
+// Enemy helper
+static void EnemyFireBullets(Enemy &e, int count)
 {
-    // try a bunch of times to find a floor tile
-    for (int tries = 0; tries < 100; tries++) {
-        int tx = GetRandomValue(1, MAP_WIDTH  - 2);  // avoid outer wall
-        int ty = GetRandomValue(1, MAP_HEIGHT - 2);
+    for (int k = 0; k < count; k++) {
+        for (int i = 0; i < NUM_SHOOTS; i++) {
+            if (!shoot[i].active) {
+                shoot[i].active = true;
 
-        int t = earthMap[ty][tx];
-        if (t != 1) { // not a wall
-            // return pixel position (center of tile)
-            *outX = tx * TILE_SIZE + TILE_SIZE * 0.25f;   // small inset so 20x20 fits
-            *outY = ty * TILE_SIZE + TILE_SIZE * 0.25f;
-            return true;
+                float cx = e.rec.x + e.rec.width  * 0.5f;
+                float cy = e.rec.y + e.rec.height * 0.5f;
+
+                shoot[i].rec.width  = 10;
+                shoot[i].rec.height = 5;
+
+                // start at center
+                shoot[i].rec.x = cx;
+                shoot[i].rec.y = cy;
+
+                // push out a bit in facing direction
+                const float spawnOffset = 8.0f;
+                switch (e.facing) {
+                    case RIGHT: 
+                        shoot[i].rec.x += spawnOffset; 
+                        break;
+                    case LEFT:  
+                        shoot[i].rec.x -= spawnOffset; 
+                        break;
+                    case UP:    
+                        shoot[i].rec.y -= spawnOffset; 
+                        break;
+                    case DOWN:  
+                        shoot[i].rec.y += spawnOffset; 
+                        break;
+                }
+
+                shoot[i].color = RED;          
+                shoot[i].facing = e.facing;
+                shoot[i].fromPlayer = false;    
+                break;
+            }
         }
     }
-    return false; // no spot found
 }
 
 static void InitPlayerOnce(void)
@@ -229,6 +328,27 @@ static void InitPlayerOnce(void)
 static void InitMission(void)
 {
     gHasKey = false;
+    int (*currMap)[MAP_WIDTH] = GetMapForFloor(gFloor);
+
+    // Player Spawn
+    float sx, sy;
+    if (Map_FindTile(currMap, 3, &sx, &sy)) {
+        player.rec.x = sx;
+        player.rec.y = sy;
+    } else {
+        player.rec.x = 90;
+        player.rec.y = 60;
+    }
+
+    // place key from map tile 10, fallback to old hardcoded spot
+    float kx, ky;
+    if (Map_FindKeyTile(currMap, &kx, &ky)) {
+        gKeyPos.x = kx;
+        gKeyPos.y = ky;
+    } else {
+        // fallback
+        gKeyPos = { 22 * TILE_SIZE + 8, 17 * TILE_SIZE + 8 };
+    }
 
     // bullets
     for (int i = 0; i < NUM_SHOOTS; i++)
@@ -239,59 +359,110 @@ static void InitMission(void)
         shoot[i].rec.height = 5;
         shoot[i].speed = {0,0};
         shoot[i].active = false;
-        shoot[i].color = MAROON;
+        shoot[i].color = RAYWHITE;
+        shoot[i].fromPlayer = false;
     }
 
     // pickups
     for (int i = 0; i < MAX_PICKUPS; i++)
     {
         float fx, fy;
-        if (GetRandomFreeTilePos(&fx, &fy)) {
+        if (Map_GetRandomFreeTile(currMap, &fx, &fy)) {
             pickups[i].position.x = fx + 10.0f;  // center it nicer
             pickups[i].position.y = fy + 10.0f;
         } else {
             pickups[i].position.x = 100;
             pickups[i].position.y = 100;
         }
+
         pickups[i].radius = 10.0f;
         pickups[i].active = true;
 
-        int r = GetRandomValue(0, 2);  // 0=HEALTH, 1=AMMO, 2=MONEY
-        pickups[i].type = (r == 0) ? HEALTH : (r == 1) ? AMMO : MONEY;
+        int r = GetRandomValue(0, 1);  // 0=AMMO, 1=MONEY
+        pickups[i].type = (r == 0) ? AMMO : MONEY;
 
         switch (pickups[i].type)
         {
-            case HEALTH: pickups[i].color = GREEN;  break;
-            case AMMO:   pickups[i].color = BLUE;   break;
-            case MONEY:  pickups[i].color = YELLOW; break;
-            default:     pickups[i].color = RAYWHITE; break;
+            case HEALTH: 
+                pickups[i].color = GREEN;  
+                break;
+            case AMMO:   
+                pickups[i].color = BLUE;   
+                break;
+            case MONEY:  
+                pickups[i].color = YELLOW; 
+                break;
+            default:     
+                pickups[i].color = RAYWHITE; 
+                break;
         }
     }
 
     // enemies
-    for (int i = 0; i < MAX_ENEMIES; i++)
-    {
-        float ex, ey;
-        if (GetRandomFreeTilePos(&ex, &ey)) {
-            enemies[i].rec.x = ex;
-            enemies[i].rec.y = ey;
-        } else {
-            enemies[i].rec.x = 100;
-            enemies[i].rec.y = 100;
-        }
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        enemies[i].active = false;
+        enemies[i].isShooter = false;
+        enemies[i].shootTimer = 0;
+    }
 
-        enemies[i].rec.width = 20;
-        enemies[i].rec.height = 20;
-        enemies[i].speed.x = 2;
-        enemies[i].speed.y = 2;
-        enemies[i].color = RED;
-        enemies[i].facing = DOWN;
-        enemies[i].active = true;
+    int enemyIndex = 0;
+
+    // scan map for enemy tiles
+    for (int y = 0; y < MAP_HEIGHT && enemyIndex < MAX_ENEMIES; y++) {
+        for (int x = 0; x < MAP_WIDTH && enemyIndex < MAX_ENEMIES; x++) {
+            int t = currMap[y][x];
+
+            // 4 = bouncer
+            if (t == 4) {
+                enemies[enemyIndex].rec.x = x * TILE_SIZE + (TILE_SIZE - 20) * 0.5f;
+                enemies[enemyIndex].rec.y = y * TILE_SIZE + (TILE_SIZE - 20) * 0.5f;
+                enemies[enemyIndex].rec.width  = 20;
+                enemies[enemyIndex].rec.height = 20;
+                enemies[enemyIndex].speed = {2, 2};
+                enemies[enemyIndex].color = RED;
+                enemies[enemyIndex].facing = DOWN;
+                enemies[enemyIndex].active = true;
+                enemies[enemyIndex].isShooter = false;
+                enemies[enemyIndex].shootTimer = 0;
+                enemyIndex++;
+            }
+
+            // 5–8 = shooter with direction
+            else if (t >= 5 && t <= 8) {
+                enemies[enemyIndex].rec.x = x * TILE_SIZE + (TILE_SIZE - 20) * 0.5f;
+                enemies[enemyIndex].rec.y = y * TILE_SIZE + (TILE_SIZE - 20) * 0.5f;
+                enemies[enemyIndex].rec.width  = 20;
+                enemies[enemyIndex].rec.height = 20;
+                enemies[enemyIndex].speed = {0, 0}; 
+                enemies[enemyIndex].color = (Color){200, 80, 40, 255};
+                enemies[enemyIndex].active = true;
+                enemies[enemyIndex].isShooter = true;
+                enemies[enemyIndex].shootTimer = 180;
+
+                switch (t) {
+                    case 5: 
+                        enemies[enemyIndex].facing = UP;    
+                        break;
+                    case 6: 
+                        enemies[enemyIndex].facing = RIGHT; 
+                        break;
+                    case 7: 
+                        enemies[enemyIndex].facing = DOWN;  
+                        break;
+                    case 8: 
+                        enemies[enemyIndex].facing = LEFT;  
+                        break;
+                }
+
+                enemyIndex++;
+            }
+        }
     }
 }
 
 static void UpdateGame(void) {
-    // Exit state
+    int (*currMap)[MAP_WIDTH] = GetCurrentMap();
+    
     if (IsKeyPressed(KEY_ESCAPE) && gState == MISSION) {
         gState = PAUSE;
         return;
@@ -334,7 +505,7 @@ static void UpdateGame(void) {
         bool blocked = false;
         for (int ty = tileTop; ty <= tileBottom; ty++) {
             for (int tx = tileLeft; tx <= tileRight; tx++) {
-                if (IsTileSolid(tx, ty)) {
+                if (Map_IsTileSolid(currMap, tx, ty)) {
                     blocked = true;
                     break;
                 }
@@ -364,7 +535,7 @@ static void UpdateGame(void) {
         bool blocked = false;
         for (int ty = tileTop; ty <= tileBottom; ty++) {
             for (int tx = tileLeft; tx <= tileRight; tx++) {
-                if (IsTileSolid(tx, ty)) {
+                if (Map_IsTileSolid(currMap, tx, ty)) {
                     blocked = true;
                     break;
                 }
@@ -382,6 +553,27 @@ static void UpdateGame(void) {
         dx /= len;
         dy /= len;
     }
+
+    float px = player.rec.x + player.rec.width * 0.5f;
+    float py = player.rec.y + player.rec.height * 0.5f;
+
+    int tx = (int)(px / TILE_SIZE);
+    int ty = (int)(py / TILE_SIZE);
+
+    if (!gHasKey) {
+        // you can optionally draw "need key" somewhere, but logic is enough
+    }
+
+    if (gHasKey && !Map_IsTileSolid(currMap, tx, ty)) {
+        int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
+        int t = currentMap[ty][tx];
+        if (t == 2) {
+            gFloor++;
+            InitMission();
+            player.currency += 5;
+        }
+    }
+
 
     if (IsKeyDown(KEY_RIGHT)) player.facing = RIGHT;
     if (IsKeyDown(KEY_LEFT))  player.facing = LEFT;
@@ -406,6 +598,16 @@ static void UpdateGame(void) {
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
 
+        // shooter first
+        if (enemies[i].isShooter) {
+            if (enemies[i].shootTimer > 0) {
+                enemies[i].shootTimer--;
+            } else {
+                EnemyFireBullets(enemies[i], 5);
+                enemies[i].shootTimer = 180;
+            }
+        }
+
         // --- try move on X ---
         float newEx = enemies[i].rec.x + enemies[i].speed.x;
 
@@ -423,7 +625,7 @@ static void UpdateGame(void) {
             bool blocked = false;
             for (int ty = tyT; ty <= tyB; ty++) {
                 for (int tx = txL; tx <= txR; tx++) {
-                    if (IsTileSolid(tx, ty)) {
+                    if (Map_IsTileSolid(currMap, tx, ty)) {
                         blocked = true;
                         break;
                     }
@@ -456,7 +658,7 @@ static void UpdateGame(void) {
             bool blocked = false;
             for (int ty = tyT; ty <= tyB; ty++) {
                 for (int tx = txL; tx <= txR; tx++) {
-                    if (IsTileSolid(tx, ty)) {
+                    if (Map_IsTileSolid(currMap, tx, ty)) {
                         blocked = true;
                         break;
                     }
@@ -471,13 +673,16 @@ static void UpdateGame(void) {
             }
         }
 
-        // you can still keep a screen clamp if you want
-        if (enemies[i].rec.x < 0)                    { enemies[i].rec.x = 0; enemies[i].speed.x *= -1; }
+        if (enemies[i].rec.x < 0) { 
+            enemies[i].rec.x = 0; enemies[i].speed.x *= -1; 
+        }
         if (enemies[i].rec.x + enemies[i].rec.width > gScreenWidth) {
             enemies[i].rec.x = gScreenWidth - enemies[i].rec.width;
             enemies[i].speed.x *= -1;
         }
-        if (enemies[i].rec.y < 0)                    { enemies[i].rec.y = 0; enemies[i].speed.y *= -1; }
+        if (enemies[i].rec.y < 0) { 
+            enemies[i].rec.y = 0; enemies[i].speed.y *= -1; 
+        }
         if (enemies[i].rec.y + enemies[i].rec.height > gScreenHeight) {
             enemies[i].rec.y = gScreenHeight - enemies[i].rec.height;
             enemies[i].speed.y *= -1;
@@ -490,32 +695,49 @@ static void UpdateGame(void) {
         };
 
         // enemy hits player
-        if (CheckCollisionCircleRec(enemyCenter, enemies[i].rec.width/2, player.rec)) {
-            if (player.iframes <= 0) {
-                player.health -= 1;
-                player.iframes = 60;
-
-                Vector2 knock = {
-                    player.rec.x + player.rec.width/2  - enemyCenter.x,
-                    player.rec.y + player.rec.height/2 - enemyCenter.y
-                };
-                float mag = sqrtf(knock.x*knock.x + knock.y*knock.y);
-                if (mag > 0.0f) {
-                    knock.x /= mag;
-                    knock.y /= mag;
-                }
-                player.rec.x += knock.x * 10.0f;
-                player.rec.y += knock.y * 10.0f;
-
-                if (player.health <= 0) {
-                    gState = GAMEOVER;
+        if (!shoot[i].fromPlayer) {
+            if (CheckCollisionCircleRec(enemyCenter, enemies[i].rec.width/2, player.rec)) {
+                if (player.iframes <= 0) {
+                    player.health -= 1;
+                    player.iframes = 60;
+    
+                    Vector2 knock = {
+                        player.rec.x + player.rec.width/2  - enemyCenter.x,
+                        player.rec.y + player.rec.height/2 - enemyCenter.y
+                    };
+                    
+                    float mag = sqrtf(knock.x*knock.x + knock.y*knock.y);
+                    if (mag > 0.0f) {
+                        knock.x /= mag;
+                        knock.y /= mag;
+                        player.rec.x += knock.x * 10.0f;
+                        player.rec.y += knock.y * 10.0f;
+                    }
+                    player.rec.x += knock.x * 10.0f;
+                    player.rec.y += knock.y * 10.0f;
+    
+                    if (player.health <= 0) {
+                        gState = GAMEOVER;
+                    }
                 }
             }
         }
 
-        // enemy hit by bullet
+        // enemy hit by bullet (only player bullets = MAROON)
         for (int j = 0; j < NUM_SHOOTS; j++) {
             if (!shoot[j].active) continue;
+            if (!shoot[j].fromPlayer) continue;
+
+            // check color manually
+            Color c = shoot[j].color;
+            bool isPlayerBullet =
+                (c.r == MAROON.r) &&
+                (c.g == MAROON.g) &&
+                (c.b == MAROON.b) &&
+                (c.a == MAROON.a);
+
+            if (!isPlayerBullet) continue;
+
             if (CheckCollisionCircleRec(enemyCenter, enemies[i].rec.width/2, shoot[j].rec)) {
                 shoot[j].active = false;
                 enemies[i].active = false;
@@ -524,11 +746,10 @@ static void UpdateGame(void) {
         }
     }
 
-
     // shooting
     if (IsKeyDown(KEY_SPACE)) {
         shootRate += 3;
-        if (shootRate % 20 == 0 && player.ammo > 0) {
+        if (shootRate % gFireDelay == 0 && player.ammo > 0) {
             for (int i = 0; i < NUM_SHOOTS; i++) {
                 if (!shoot[i].active) {
                     shoot[i].rec.x = player.rec.x;
@@ -536,6 +757,8 @@ static void UpdateGame(void) {
                     shoot[i].active = true;
                     shoot[i].facing = player.facing;
                     shoot[i].speed = {0,0};
+                    shoot[i].color = MAROON;
+                    shoot[i].fromPlayer = true;
                     player.ammo--;
                     break;
                 }
@@ -550,10 +773,10 @@ static void UpdateGame(void) {
         if (!shoot[i].active) continue;
         switch (shoot[i].facing)
         {
-            case RIGHT: shoot[i].rec.x += 7; break;
-            case LEFT:  shoot[i].rec.x -= 7; break;
-            case UP:    shoot[i].rec.y -= 7; break;
-            case DOWN:  shoot[i].rec.y += 7; break;
+            case RIGHT: shoot[i].rec.x += gBulletSpeed; break;
+            case LEFT:  shoot[i].rec.x -= gBulletSpeed; break;
+            case UP:    shoot[i].rec.y -= gBulletSpeed; break;
+            case DOWN:  shoot[i].rec.y += gBulletSpeed; break;
         }
 
         // check tile the bullet is now inside
@@ -563,7 +786,7 @@ static void UpdateGame(void) {
         int tx = (int)(bx / TILE_SIZE);
         int ty = (int)(by / TILE_SIZE);
 
-        if (IsTileSolid(tx, ty)) {
+        if (Map_IsTileSolid(currMap, tx, ty)) {
             // bullet hit wall -> destroy
             shoot[i].active = false;
             continue;
@@ -573,6 +796,45 @@ static void UpdateGame(void) {
         if (shoot[i].rec.x > gScreenWidth || shoot[i].rec.x + shoot[i].rec.width < 0 ||
             shoot[i].rec.y > gScreenHeight || shoot[i].rec.y + shoot[i].rec.height < 0) {
             shoot[i].active = false;
+        }
+
+        // identify if this bullet is from an enemy (RED)
+        Color c = shoot[i].color;
+        bool isEnemyBullet =
+            (c.r == RED.r) &&
+            (c.g == RED.g) &&
+            (c.b == RED.b) &&
+            (c.a == RED.a);
+    
+        if (isEnemyBullet) {
+            if (CheckCollisionRecs(shoot[i].rec, player.rec)) {
+                if (player.iframes <= 0) {
+                    player.health -= 1;
+                    player.iframes = 60;
+    
+                    Vector2 knock = {
+                        (player.rec.x + player.rec.width/2)  - (shoot[i].rec.x + shoot[i].rec.width/2),
+                        (player.rec.y + player.rec.height/2) - (shoot[i].rec.y + shoot[i].rec.height/2)
+                    };
+                    float mag = sqrtf(knock.x*knock.x + knock.y*knock.y);
+                    if (mag > 0.0f) {
+                        knock.x /= mag;
+                        knock.y /= mag;
+                        player.rec.x += knock.x * 10.0f;
+                        player.rec.y += knock.y * 10.0f;
+                    }
+    
+                    // bullet is gone
+                    shoot[i].active = false;
+    
+                    // death check
+                    if (player.health <= 0) {
+                        gState = GAMEOVER;
+                    }
+                } else {
+                    shoot[i].active = false;
+                }
+            }
         }
     }
 
@@ -616,26 +878,25 @@ static void DrawGame(void)
 
     snprintf(buf, sizeof(buf), "Currency: %d", player.currency);
     DrawText(buf, 10, 100, 20, DARKGRAY);
+    
+    snprintf(buf, sizeof(buf), "Floor: %d", gFloor);
+    DrawText(buf, 10, 130, 20, DARKGRAY);
 
     EndDrawing();
 }
 
 static void DrawMapCurrentRoom(void)
 {
-    // Draw Key 
-    if (!gHasKey) {
-        DrawCircleV(gKeyPos, gKeyRadius, GOLD);
-        DrawCircleLines(gKeyPos.x, gKeyPos.y, gKeyRadius, RAYWHITE);
-    }
-
+    
     // for now just draw the earthMap
     for (int y = 0; y < MAP_HEIGHT; y++) {
         for (int x = 0; x < MAP_WIDTH; x++) {
             float tileX = (float)(x * TILE_SIZE);
             float tileY = (float)(y * TILE_SIZE);
             Rectangle tile = { tileX, tileY, (float)TILE_SIZE, (float)TILE_SIZE };
-
-            int t = earthMap[y][x];
+            
+            int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
+            int t = currentMap[y][x];
             if (t == 1) {
                 DrawRectangleRec(tile, (Color){30, 30, 40, 255});
             } else if (t == 2) {
@@ -645,6 +906,12 @@ static void DrawMapCurrentRoom(void)
                 DrawRectangleRec(tile, (Color){10, 15, 25, 255});
             }
         }
+    }
+
+    // Draw Key 
+    if (!gHasKey) {
+        DrawCircleV(gKeyPos, gKeyRadius, GOLD);
+        DrawCircleLines(gKeyPos.x, gKeyPos.y, gKeyRadius, RAYWHITE);
     }
 }
 
@@ -734,20 +1001,77 @@ static void UpdateShop(void)
     if (IsKeyPressed(KEY_ESCAPE)) {
         gState = STATION;
     }
+
+    // 1) Health
+    if (IsKeyPressed(KEY_ONE)) {
+        if (player.currency >= 500) {
+            player.currency -= 500;
+            player.health += 1;
+        }
+    }
+
+    if (IsKeyPressed(KEY_TWO)) {
+        if (player.currency >= 5) {
+            player.currency -= 5;
+            player.ammo += 10;
+        }
+    }
+
+    if (IsKeyPressed(KEY_THREE)) {
+        int cost = 15;
+        if (player.currency >= cost) {
+            player.currency -= cost;
+            if (gBulletSpeed < 15) {
+                gBulletSpeed += 1;
+            }
+        }
+    }
+
+    if (IsKeyPressed(KEY_FOUR)) {
+        int cost = 20;
+        if (player.currency >= cost) {
+            if (gFireDelay > 4) {
+                player.currency -= cost;
+                gFireDelay -= 1;
+            }
+        }
+    }
 }
+
 
 static void DrawShop(void)
 {
     BeginDrawing();
     ClearBackground((Color){12, 12, 24, 255});
     DrawText("SHOP (ESC to return)", 40, 40, 30, RAYWHITE);
+
+    DrawText("1) +1 Health (500 cr)", 60, 110, 20, RAYWHITE);
+    DrawText("2) +10 Ammo (5 cr)",   60, 140, 20, RAYWHITE);
+    DrawText("3) Bullet Speed +1 (15 cr)", 60, 170, 20, RAYWHITE);
+    DrawText("4) Fire Rate + (20 cr)",     60, 200, 20, RAYWHITE);
+
+    // current stats
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Credits: %d", player.currency);
+    DrawText(buf, 60, 240, 20, GOLD);
+
+    snprintf(buf, sizeof(buf), "Ammo: %d", player.ammo);
+    DrawText(buf, 60, 270, 20, RAYWHITE);
+
+    snprintf(buf, sizeof(buf), "Bullet speed: %d", gBulletSpeed);
+    DrawText(buf, 60, 300, 20, RAYWHITE);
+
+    snprintf(buf, sizeof(buf), "Fire delay: %d (lower = faster)", gFireDelay);
+    DrawText(buf, 60, 330, 18, RAYWHITE);
+
     EndDrawing();
 }
+
+
 
 static void UpdatePause(void)
 {
     if (IsKeyPressed(KEY_ESCAPE)) {
-        // Resume game
         gState = MISSION;
     }
 
@@ -759,7 +1083,6 @@ static void UpdatePause(void)
 static void DrawPause(void)
 {
     BeginDrawing();
-    // Keep a translucent overlay so the game background is still visible
     DrawRectangle(0, 0, gScreenWidth, gScreenHeight, Fade(BLACK, 0.6f));
 
     DrawText("PAUSED", gScreenWidth/2 - 80, gScreenHeight/2 - 80, 40, RAYWHITE);
@@ -772,7 +1095,6 @@ static void DrawPause(void)
 static void UpdateQuit(void)
 {
     if (IsKeyPressed(KEY_ESCAPE)) {
-        // Resume game
         gState = STATION;
     }
 
@@ -785,7 +1107,6 @@ static void UpdateQuit(void)
 static void DrawQuit(void)
 {
     BeginDrawing();
-    // Keep a translucent overlay so the game background is still visible
     DrawRectangle(0, 0, gScreenWidth, gScreenHeight, Fade(BLACK, 0.6f));
 
     DrawText("QUIT", gScreenWidth/2 - 80, gScreenHeight/2 - 80, 40, RAYWHITE);

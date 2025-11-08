@@ -177,6 +177,30 @@ src/main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpp_game.dir/build.make CMakeFiles/cpp_game.dir/src/main.cpp.s
 .PHONY : src/main.cpp.s
 
+src/maps.o: src/maps.cpp.o
+.PHONY : src/maps.o
+
+# target to build an object file
+src/maps.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpp_game.dir/build.make CMakeFiles/cpp_game.dir/src/maps.cpp.o
+.PHONY : src/maps.cpp.o
+
+src/maps.i: src/maps.cpp.i
+.PHONY : src/maps.i
+
+# target to preprocess a source file
+src/maps.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpp_game.dir/build.make CMakeFiles/cpp_game.dir/src/maps.cpp.i
+.PHONY : src/maps.cpp.i
+
+src/maps.s: src/maps.cpp.s
+.PHONY : src/maps.s
+
+# target to generate assembly for a file
+src/maps.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpp_game.dir/build.make CMakeFiles/cpp_game.dir/src/maps.cpp.s
+.PHONY : src/maps.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -192,6 +216,9 @@ help:
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"
+	@echo "... src/maps.o"
+	@echo "... src/maps.i"
+	@echo "... src/maps.s"
 .PHONY : help
 
 
