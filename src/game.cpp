@@ -359,7 +359,7 @@ static void EnemyFireBullets(Enemy &e, int count)
 // boss fires bullets in a circle
 static void BossFireCircle(Enemy &e)
 {
-    const int bullets = 12;            // 12-way spread
+    const int bullets = 12;
     const float speed = 4.0f;
 
     float cx = e.rec.x + e.rec.width  * 0.5f;
@@ -715,7 +715,7 @@ static void UpdateGame(void)
         if (!enemies[i].active) continue;
 
         // shooter first
-        if (enemies[i].isShooter) {
+        if (enemies[i].isShooter && !enemies[i].isBoss) {
             if (enemies[i].shootTimer > 0) {
                 enemies[i].shootTimer--;
             } else {
@@ -880,16 +880,15 @@ static void UpdateGame(void)
                 BossFireCircle(enemies[i]);
                 enemies[i].shootTimer = 150;
             }
-        } else {
-            if (enemies[i].isShooter) {
-                if (enemies[i].shootTimer > 0) {
-                    enemies[i].shootTimer--;
-                } else {
-                    EnemyFireBullets(enemies[i], 5);
-                    enemies[i].shootTimer = 180;
-                }
+        } else if (enemies[i].isShooter) {
+            if (enemies[i].shootTimer > 0) {
+                enemies[i].shootTimer--;
+            } else {
+                EnemyFireBullets(enemies[i], 5);
+                enemies[i].shootTimer = 180;
             }
         }
+        
     }
 
     // shooting
@@ -917,13 +916,26 @@ static void UpdateGame(void)
     // bullet movement
     for (int i = 0; i < NUM_SHOOTS; i++) {
         if (!shoot[i].active) continue;
+        
+        if (fabsf(shoot[i].speed.x) > 0.001f || fabsf(shoot[i].speed.y) > 0.001f) {
+            shoot[i].rec.x += shoot[i].speed.x;
+            shoot[i].rec.y += shoot[i].speed.y;
+        } else {
         switch (shoot[i].facing)
         {
-            case RIGHT: shoot[i].rec.x += gBulletSpeed; break;
-            case LEFT:  shoot[i].rec.x -= gBulletSpeed; break;
-            case UP:    shoot[i].rec.y -= gBulletSpeed; break;
-            case DOWN:  shoot[i].rec.y += gBulletSpeed; break;
-        }
+            case RIGHT: 
+                shoot[i].rec.x += gBulletSpeed; 
+                break;
+            case LEFT:  
+                shoot[i].rec.x -= gBulletSpeed; 
+                break;
+            case UP:    
+                shoot[i].rec.y -= gBulletSpeed; 
+                break;
+            case DOWN:  
+                shoot[i].rec.y += gBulletSpeed; 
+                break;
+        }}
 
         // check tile the bullet is now inside
         float bx = shoot[i].rec.x + shoot[i].rec.width  * 0.5f;
