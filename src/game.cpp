@@ -13,7 +13,7 @@
 #define MAX_ENEMIES 5
 #define TILE_SIZE   32
 #define MAP_WIDTH   25
-#define MAP_HEIGHT  19
+#define MAP_HEIGHT  23
 #define MAX_ROOMS_PER_FLOOR 8
 
 
@@ -93,13 +93,17 @@ static Room gRooms[MAX_ROOMS_PER_FLOOR];
 static int earthMap[MAP_HEIGHT][MAP_WIDTH] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1},
-    {1,0,1,1,0,0,0,1,1,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,1,1,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
@@ -123,6 +127,8 @@ static void UpdatePause(void);
 static void DrawPause(void);
 static void UpdateQuit(void);
 static void DrawQuit(void);
+static bool IsTileSolid(int tx, int ty);
+static bool GetRandomFreeTilePos(float *outX, float *outY);
 
 void InitGame(int screenWidth, int screenHeight)
 {
@@ -174,15 +180,40 @@ void GameUnload(void)
     // if you load textures/sounds later, unload here
 }
 
+// Helpers for tile logic
+static bool IsTileSolid(int tx, int ty) {
+    if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) return true;
+    int t = earthMap[ty][tx];
+    return (t == 1);  // walls block
+}
+
+static bool GetRandomFreeTilePos(float *outX, float *outY)
+{
+    // try a bunch of times to find a floor tile
+    for (int tries = 0; tries < 100; tries++) {
+        int tx = GetRandomValue(1, MAP_WIDTH  - 2);  // avoid outer wall
+        int ty = GetRandomValue(1, MAP_HEIGHT - 2);
+
+        int t = earthMap[ty][tx];
+        if (t != 1) { // not a wall
+            // return pixel position (center of tile)
+            *outX = tx * TILE_SIZE + TILE_SIZE * 0.25f;   // small inset so 20x20 fits
+            *outY = ty * TILE_SIZE + TILE_SIZE * 0.25f;
+            return true;
+        }
+    }
+    return false; // no spot found
+}
+
 static void InitPlayerOnce(void)
 {
-    player.rec.x =  20;
-    player.rec.y = 50;
+    player.rec.x =  90;
+    player.rec.y = 60;
     player.rec.width = 20;
     player.rec.height = 20;
     player.speed.x = 5;
     player.speed.y = 5;
-    player.color = BLACK;
+    player.color = WHITE;
     player.facing = UP;
     player.health = 3;
     player.ammo = 50;
@@ -207,8 +238,14 @@ static void InitMission(void)
     // pickups
     for (int i = 0; i < MAX_PICKUPS; i++)
     {
-        pickups[i].position.x = GetRandomValue(50, gScreenWidth - 50);
-        pickups[i].position.y = GetRandomValue(50, gScreenHeight - 50);
+        float fx, fy;
+        if (GetRandomFreeTilePos(&fx, &fy)) {
+            pickups[i].position.x = fx + 10.0f;  // center it nicer
+            pickups[i].position.y = fy + 10.0f;
+        } else {
+            pickups[i].position.x = 100;
+            pickups[i].position.y = 100;
+        }
         pickups[i].radius = 10.0f;
         pickups[i].active = true;
 
@@ -227,8 +264,15 @@ static void InitMission(void)
     // enemies
     for (int i = 0; i < MAX_ENEMIES; i++)
     {
-        enemies[i].rec.x = GetRandomValue(100, gScreenWidth - 100);
-        enemies[i].rec.y = GetRandomValue(100, gScreenHeight - 100);
+        float ex, ey;
+        if (GetRandomFreeTilePos(&ex, &ey)) {
+            enemies[i].rec.x = ex;
+            enemies[i].rec.y = ey;
+        } else {
+            enemies[i].rec.x = 100;
+            enemies[i].rec.y = 100;
+        }
+
         enemies[i].rec.width = 20;
         enemies[i].rec.height = 20;
         enemies[i].speed.x = 2;
@@ -239,8 +283,7 @@ static void InitMission(void)
     }
 }
 
-static void UpdateGame(void)
-{
+static void UpdateGame(void) {
     // Exit state
     if (IsKeyPressed(KEY_ESCAPE) && gState == MISSION) {
         gState = PAUSE;
@@ -254,14 +297,77 @@ static void UpdateGame(void)
     if (IsKeyDown(KEY_S)) dy += 1.0f;
     if (IsKeyDown(KEY_W)) dy -= 1.0f;
 
+    // how far we want to move this frame
+    float moveX = dx * player.speed.x;
+    float moveY = dy * player.speed.y;
+
+    // --- move on X first ---
+    if (moveX != 0.0f) {
+        float newX = player.rec.x + moveX;
+
+        // figure out which tiles the player's rectangle would cover
+        // we check the top and bottom edges
+        float left   = newX;
+        float right  = newX + player.rec.width;
+        float top    = player.rec.y;
+        float bottom = player.rec.y + player.rec.height;
+
+        int tileLeft   = (int)(left   / TILE_SIZE);
+        int tileRight  = (int)(right  / TILE_SIZE);
+        int tileTop    = (int)(top    / TILE_SIZE);
+        int tileBottom = (int)(bottom / TILE_SIZE);
+
+        bool blocked = false;
+        for (int ty = tileTop; ty <= tileBottom; ty++) {
+            for (int tx = tileLeft; tx <= tileRight; tx++) {
+                if (IsTileSolid(tx, ty)) {
+                    blocked = true;
+                    break;
+                }
+            }
+            if (blocked) break;
+        }
+
+        if (!blocked) {
+            player.rec.x = newX;
+        }
+    }
+
+    // --- move on Y second ---
+    if (moveY != 0.0f) {
+        float newY = player.rec.y + moveY;
+
+        float left   = player.rec.x;
+        float right  = player.rec.x + player.rec.width;
+        float top    = newY;
+        float bottom = newY + player.rec.height;
+
+        int tileLeft   = (int)(left   / TILE_SIZE);
+        int tileRight  = (int)(right  / TILE_SIZE);
+        int tileTop    = (int)(top    / TILE_SIZE);
+        int tileBottom = (int)(bottom / TILE_SIZE);
+
+        bool blocked = false;
+        for (int ty = tileTop; ty <= tileBottom; ty++) {
+            for (int tx = tileLeft; tx <= tileRight; tx++) {
+                if (IsTileSolid(tx, ty)) {
+                    blocked = true;
+                    break;
+                }
+            }
+            if (blocked) break;
+        }
+
+        if (!blocked) {
+            player.rec.y = newY;
+        }
+    }
+
     float len = sqrtf(dx*dx + dy*dy);
     if (len > 0.0f) {
         dx /= len;
         dy /= len;
     }
-
-    player.rec.x += dx * player.speed.x;
-    player.rec.y += dy * player.speed.y;
 
     if (IsKeyDown(KEY_RIGHT)) player.facing = RIGHT;
     if (IsKeyDown(KEY_LEFT))  player.facing = LEFT;
@@ -286,16 +392,86 @@ static void UpdateGame(void)
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
 
-        enemies[i].rec.x += enemies[i].speed.x;
-        enemies[i].rec.y += enemies[i].speed.y;
+        // --- try move on X ---
+        float newEx = enemies[i].rec.x + enemies[i].speed.x;
 
-        if (enemies[i].rec.x < 0 || enemies[i].rec.x + enemies[i].rec.width > gScreenWidth)
+        {
+            float left   = newEx;
+            float right  = newEx + enemies[i].rec.width;
+            float top    = enemies[i].rec.y;
+            float bottom = enemies[i].rec.y + enemies[i].rec.height;
+
+            int txL = (int)(left   / TILE_SIZE);
+            int txR = (int)(right  / TILE_SIZE);
+            int tyT = (int)(top    / TILE_SIZE);
+            int tyB = (int)(bottom / TILE_SIZE);
+
+            bool blocked = false;
+            for (int ty = tyT; ty <= tyB; ty++) {
+                for (int tx = txL; tx <= txR; tx++) {
+                    if (IsTileSolid(tx, ty)) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (blocked) break;
+            }
+
+            if (!blocked) {
+                enemies[i].rec.x = newEx;
+            } else {
+                // bounce off wall
+                enemies[i].speed.x *= -1;
+            }
+        }
+
+        // --- try move on Y ---
+        float newEy = enemies[i].rec.y + enemies[i].speed.y;
+
+        {
+            float left   = enemies[i].rec.x;
+            float right  = enemies[i].rec.x + enemies[i].rec.width;
+            float top    = newEy;
+            float bottom = newEy + enemies[i].rec.height;
+
+            int txL = (int)(left   / TILE_SIZE);
+            int txR = (int)(right  / TILE_SIZE);
+            int tyT = (int)(top    / TILE_SIZE);
+            int tyB = (int)(bottom / TILE_SIZE);
+
+            bool blocked = false;
+            for (int ty = tyT; ty <= tyB; ty++) {
+                for (int tx = txL; tx <= txR; tx++) {
+                    if (IsTileSolid(tx, ty)) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (blocked) break;
+            }
+
+            if (!blocked) {
+                enemies[i].rec.y = newEy;
+            } else {
+                enemies[i].speed.y *= -1;
+            }
+        }
+
+        // you can still keep a screen clamp if you want
+        if (enemies[i].rec.x < 0)                    { enemies[i].rec.x = 0; enemies[i].speed.x *= -1; }
+        if (enemies[i].rec.x + enemies[i].rec.width > gScreenWidth) {
+            enemies[i].rec.x = gScreenWidth - enemies[i].rec.width;
             enemies[i].speed.x *= -1;
-        if (enemies[i].rec.y < 0 || enemies[i].rec.y + enemies[i].rec.height > gScreenHeight)
+        }
+        if (enemies[i].rec.y < 0)                    { enemies[i].rec.y = 0; enemies[i].speed.y *= -1; }
+        if (enemies[i].rec.y + enemies[i].rec.height > gScreenHeight) {
+            enemies[i].rec.y = gScreenHeight - enemies[i].rec.height;
             enemies[i].speed.y *= -1;
+        }
 
+        // --- now do collisions with player / bullets ---
         Vector2 enemyCenter = {
-            enemies[i].rec.x + enemies[i].rec.width / 2.0f,
+            enemies[i].rec.x + enemies[i].rec.width  / 2.0f,
             enemies[i].rec.y + enemies[i].rec.height / 2.0f
         };
 
@@ -305,7 +481,6 @@ static void UpdateGame(void)
                 player.health -= 1;
                 player.iframes = 60;
 
-                // knockback
                 Vector2 knock = {
                     player.rec.x + player.rec.width/2  - enemyCenter.x,
                     player.rec.y + player.rec.height/2 - enemyCenter.y
@@ -326,15 +501,15 @@ static void UpdateGame(void)
 
         // enemy hit by bullet
         for (int j = 0; j < NUM_SHOOTS; j++) {
-            if (shoot[j].active &&
-                CheckCollisionCircleRec(enemyCenter, enemies[i].rec.width/2, shoot[j].rec))
-            {
+            if (!shoot[j].active) continue;
+            if (CheckCollisionCircleRec(enemyCenter, enemies[i].rec.width/2, shoot[j].rec)) {
                 shoot[j].active = false;
                 enemies[i].active = false;
                 player.currency += 5;
             }
         }
     }
+
 
     // shooting
     if (IsKeyDown(KEY_SPACE)) {
@@ -366,6 +541,20 @@ static void UpdateGame(void)
             case UP:    shoot[i].rec.y -= 7; break;
             case DOWN:  shoot[i].rec.y += 7; break;
         }
+
+        // check tile the bullet is now inside
+        float bx = shoot[i].rec.x + shoot[i].rec.width  * 0.5f;
+        float by = shoot[i].rec.y + shoot[i].rec.height * 0.5f;
+
+        int tx = (int)(bx / TILE_SIZE);
+        int ty = (int)(by / TILE_SIZE);
+
+        if (IsTileSolid(tx, ty)) {
+            // bullet hit wall -> destroy
+            shoot[i].active = false;
+            continue;
+        }
+
         // off-screen deactivate
         if (shoot[i].rec.x > gScreenWidth || shoot[i].rec.x + shoot[i].rec.width < 0 ||
             shoot[i].rec.y > gScreenHeight || shoot[i].rec.y + shoot[i].rec.height < 0) {
