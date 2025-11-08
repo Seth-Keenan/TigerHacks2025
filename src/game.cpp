@@ -90,6 +90,11 @@ static int gCurrentRoom = 0;
 static int gRoomsOnFloor = 0;
 static Room gRooms[MAX_ROOMS_PER_FLOOR];
 
+static bool gHasKey = false; 
+static Vector2 gKeyPos = { 21 * TILE_SIZE + 8, 18 * TILE_SIZE + 8 }; 
+static float   gKeyRadius = 10.0f;
+
+
 static int earthMap[MAP_HEIGHT][MAP_WIDTH] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1},
@@ -223,6 +228,8 @@ static void InitPlayerOnce(void)
 
 static void InitMission(void)
 {
+    gHasKey = false;
+
     // bullets
     for (int i = 0; i < NUM_SHOOTS; i++)
     {
@@ -288,6 +295,13 @@ static void UpdateGame(void) {
     if (IsKeyPressed(KEY_ESCAPE) && gState == MISSION) {
         gState = PAUSE;
         return;
+    }
+
+    if (!gHasKey) {
+        if (CheckCollisionCircleRec(gKeyPos, gKeyRadius, player.rec)) {
+            gHasKey = true;
+            // maybe play sound later
+        }
     }
 
     // movement
@@ -608,6 +622,12 @@ static void DrawGame(void)
 
 static void DrawMapCurrentRoom(void)
 {
+    // Draw Key 
+    if (!gHasKey) {
+        DrawCircleV(gKeyPos, gKeyRadius, GOLD);
+        DrawCircleLines(gKeyPos.x, gKeyPos.y, gKeyRadius, RAYWHITE);
+    }
+
     // for now just draw the earthMap
     for (int y = 0; y < MAP_HEIGHT; y++) {
         for (int x = 0; x < MAP_WIDTH; x++) {
