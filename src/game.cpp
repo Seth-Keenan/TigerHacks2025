@@ -175,6 +175,8 @@ class BouncerEnemy {
         }
 };
 
+static Texture2D spaceTiger;
+
 static int gScreenWidth  = 800;
 static int gScreenHeight = 600;
 
@@ -241,6 +243,7 @@ void InitGame(int screenWidth, int screenHeight)
     gScreenHeight = screenHeight;
 
     InitPlayerOnce();
+    spaceTiger = LoadTexture("assets/tigerinspace.png");
     gState = START;
 }
 
@@ -309,7 +312,7 @@ void GameUpdateDraw(void)
 
 void GameUnload(void)
 {
-    // if you load textures/sounds later, unload here
+    UnloadTexture(spaceTiger);
 }
 
 // Enemy helper
@@ -1335,27 +1338,45 @@ static void UpdateStart(void)
 static void DrawStart(void)
 {
     BeginDrawing();
+
     ClearBackground((Color){ 6, 9, 20, 255 });
 
-    // Title
-    const char *title = "SPACE STATION STRIKER"; // change to your game name
+    if (spaceTiger.id > 0) 
+    {
+        float tigerScale = 1.0f;
+        float texW = spaceTiger.width * tigerScale;
+        float texH = spaceTiger.height * tigerScale;
+
+        float yOffset = sinf(GetTime() * 2.0f) * 5.0f;
+
+        DrawTextureEx(
+            spaceTiger,
+            (Vector2){
+                gScreenWidth/2.0f - texW/2.0f, yOffset - 25
+            },
+            0.0f,
+            tigerScale,
+            RAYWHITE
+        );
+    }
+    else
+    {
+        DrawText("tigerinspace.png not found", 20, gScreenHeight - 40, 20, RED);
+    }
+    
+    const char *title = "Tiger Space Program";
     int titleFont = 40;
     int titleWidth = MeasureText(title, titleFont);
-    DrawText(title, gScreenWidth/2 - titleWidth/2, 120, titleFont, RAYWHITE);
+    DrawText(title, gScreenWidth/2 - titleWidth/2, 60, titleFont, RAYWHITE);
 
-    // Subtitle
     const char *sub = "Top-down missions, credits, upgrades.";
     int subFont = 20;
     int subWidth = MeasureText(sub, subFont);
-    DrawText(sub, gScreenWidth/2 - subWidth/2, 180, subFont, GRAY);
+    DrawText(sub, gScreenWidth/2 - subWidth/2, 110, subFont, RAYWHITE);
 
-    // Instructions
-    DrawText("Press ENTER to start", gScreenWidth/2 - 130, 280, 24, GOLD);
-    DrawText("Press ESC to quit",   gScreenWidth/2 - 100, 320, 20, GRAY);
-
-    // Optional: quick controls preview
-    DrawText("WASD to move  |  Arrows to aim  |  SPACE to shoot", 
-             gScreenWidth/2 - 240, 380, 18, (Color){180, 180, 200, 255});
+    DrawText("Press ENTER to start", gScreenWidth/2 - 130, 160, 24, GOLD);
+    DrawText("Press ESC to quit",   gScreenWidth/2 - 100, 195, 20, GRAY);
 
     EndDrawing();
 }
+
