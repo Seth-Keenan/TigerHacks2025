@@ -1,6 +1,6 @@
 CMakeFiles/cpp_game.dir/src/game.cpp.o: \
   /Users/sef/src/TigerHacks2025/src/game.cpp \
-  /Users/sef/src/TigerHacks2025/src/game.h \
+  /Users/sef/src/TigerHacks2025/src/maps.h \
   /opt/homebrew/opt/raylib/include/raylib.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_header_macro.h \
@@ -9,7 +9,7 @@ CMakeFiles/cpp_game.dir/src/game.cpp.o: \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_va_arg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg___va_copy.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_va_copy.h \
-  /Users/sef/src/TigerHacks2025/src/maps.h \
+  /Users/sef/src/TigerHacks2025/src/game.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/include/c++/v1/cstdio \
   /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/include/c++/v1/__config \
   /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/include/c++/v1/__config_site \

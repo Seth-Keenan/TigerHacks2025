@@ -21,6 +21,8 @@ typedef enum {
     START,
     STORY_EARTH,
     WIN_EARTH,
+    STORY_MARS, 
+    WIN_MARS, 
 } GameState;
 
 // optional, but you already had it
