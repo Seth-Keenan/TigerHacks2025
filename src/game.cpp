@@ -176,6 +176,7 @@ class BouncerEnemy {
 };
 
 static Texture2D spaceTiger;
+static Texture2D tigerShip;
 
 static int gScreenWidth  = 800;
 static int gScreenHeight = 600;
@@ -186,10 +187,13 @@ static Pickup pickups[MAX_PICKUPS] = { 0 };
 static Enemy enemies[MAX_ENEMIES] = { 0 };
 
 static int shootRate = 0;
-static int gBulletSpeed = 7;   
-static int gFireDelay   = 20;  
+static int gPlayerBulletSpeed = 7;   
+static const int gEnemyBulletSpeed = 7;
+static int gFireDelay = 20;
 
-static GameState gState = STATION;
+
+static GameState gState = START;
+static int gDamageFlashTimer = 0;
 
 int gFloor = 1;
 static int gCurrentRoom = 0;
@@ -223,6 +227,7 @@ static bool IsTileSolid(int tx, int ty);
 static bool GetRandomFreeTilePos(float *outX, float *outY);
 static bool FindTileOfType(int tileValue, float *outX, float *outY);
 static void ResetToFloor1KeepMoney(void);
+static Levels gCurrentLevel = EARTH;
 
 static void HandlePickup(Pickup *p)
 {
@@ -237,6 +242,25 @@ static void HandlePickup(Pickup *p)
     }
 }
 
+static void SpawnPlayerBullet(void)
+{
+    if (player.ammo <= 0) return;
+
+    for (int i = 0; i < NUM_SHOOTS; i++) {
+        if (!shoot[i].active) {
+            shoot[i].rec.x = player.rec.x;
+            shoot[i].rec.y = player.rec.y + player.rec.height/4;
+            shoot[i].active = true;
+            shoot[i].facing = player.facing;
+            shoot[i].speed = (Vector2){0,0};
+            shoot[i].color = MAROON;
+            shoot[i].fromPlayer = true;
+            player.ammo--;
+            break;
+        }
+    }
+}
+
 void InitGame(int screenWidth, int screenHeight)
 {
     gScreenWidth = screenWidth;
@@ -244,6 +268,7 @@ void InitGame(int screenWidth, int screenHeight)
 
     InitPlayerOnce();
     spaceTiger = LoadTexture("assets/tigerinspace.png");
+    tigerShip = LoadTexture("assets/tigerinship.png");
     gState = START;
 }
 
@@ -313,6 +338,7 @@ void GameUpdateDraw(void)
 void GameUnload(void)
 {
     UnloadTexture(spaceTiger);
+    UnloadTexture(tigerShip);
 }
 
 // Enemy helper
@@ -570,10 +596,12 @@ static void ResetToFloor1KeepMoney(void)
 
     gFloor = 1;
     gHasKey = false;
-    player.health = 3;
+    // If player had bought health upgrades, don't reset below 3
+    if (player.health < 3) {
+        player.health = 3;
+    }
     player.ammo   = 50;
     player.iframes = 0;
-    gBulletSpeed = 7;
     gFireDelay   = 20;
 
     player.currency = savedMoney;
@@ -819,22 +847,7 @@ static void UpdateGame(void)
                 if (player.iframes <= 0) {
                     player.health -= 1;
                     player.iframes = 60;
-    
-                    Vector2 knock = {
-                        player.rec.x + player.rec.width/2  - enemyCenter.x,
-                        player.rec.y + player.rec.height/2 - enemyCenter.y
-                    };
-                    
-                    float mag = sqrtf(knock.x*knock.x + knock.y*knock.y);
-                    if (mag > 0.0f) {
-                        knock.x /= mag;
-                        knock.y /= mag;
-                        player.rec.x += knock.x * 10.0f;
-                        player.rec.y += knock.y * 10.0f;
-                    }
-                    player.rec.x += knock.x * 10.0f;
-                    player.rec.y += knock.y * 10.0f;
-    
+                    gDamageFlashTimer = 20;
                     if (player.health <= 0) {
                         gState = GAMEOVER;
                         return;
@@ -895,26 +908,18 @@ static void UpdateGame(void)
     }
 
     // shooting
+    if (IsKeyPressed(KEY_SPACE)) {
+        SpawnPlayerBullet();
+    }
     if (IsKeyDown(KEY_SPACE)) {
         shootRate += 3;
-        if (shootRate % gFireDelay == 0 && player.ammo > 0) {
-            for (int i = 0; i < NUM_SHOOTS; i++) {
-                if (!shoot[i].active) {
-                    shoot[i].rec.x = player.rec.x;
-                    shoot[i].rec.y = player.rec.y + player.rec.height/4;
-                    shoot[i].active = true;
-                    shoot[i].facing = player.facing;
-                    shoot[i].speed = {0,0};
-                    shoot[i].color = MAROON;
-                    shoot[i].fromPlayer = true;
-                    player.ammo--;
-                    break;
-                }
-            }
+        if (shootRate % gFireDelay == 0) {
+            SpawnPlayerBullet();
         }
     } else {
         if (shootRate > 0) shootRate--;
     }
+
 
     // bullet movement
     for (int i = 0; i < NUM_SHOOTS; i++) {
@@ -924,21 +929,25 @@ static void UpdateGame(void)
             shoot[i].rec.x += shoot[i].speed.x;
             shoot[i].rec.y += shoot[i].speed.y;
         } else {
-        switch (shoot[i].facing)
-        {
-            case RIGHT: 
-                shoot[i].rec.x += gBulletSpeed; 
-                break;
-            case LEFT:  
-                shoot[i].rec.x -= gBulletSpeed; 
-                break;
-            case UP:    
-                shoot[i].rec.y -= gBulletSpeed; 
-                break;
-            case DOWN:  
-                shoot[i].rec.y += gBulletSpeed; 
-                break;
-        }}
+            bool fromPlayer = shoot[i].fromPlayer;
+
+            int speed = fromPlayer ? gPlayerBulletSpeed : gEnemyBulletSpeed;
+            switch (shoot[i].facing)
+            {
+                case RIGHT: 
+                    shoot[i].rec.x += speed; 
+                    break;
+                case LEFT:  
+                    shoot[i].rec.x -= speed; 
+                    break;
+                case UP:    
+                    shoot[i].rec.y -= speed; 
+                    break;
+                case DOWN:  
+                    shoot[i].rec.y += speed; 
+                    break;
+            }
+        }
 
         // check tile the bullet is now inside
         float bx = shoot[i].rec.x + shoot[i].rec.width  * 0.5f;
@@ -972,23 +981,9 @@ static void UpdateGame(void)
                 if (player.iframes <= 0) {
                     player.health -= 1;
                     player.iframes = 60;
-    
-                    Vector2 knock = {
-                        (player.rec.x + player.rec.width/2)  - (shoot[i].rec.x + shoot[i].rec.width/2),
-                        (player.rec.y + player.rec.height/2) - (shoot[i].rec.y + shoot[i].rec.height/2)
-                    };
-                    float mag = sqrtf(knock.x*knock.x + knock.y*knock.y);
-                    if (mag > 0.0f) {
-                        knock.x /= mag;
-                        knock.y /= mag;
-                        player.rec.x += knock.x * 10.0f;
-                        player.rec.y += knock.y * 10.0f;
-                    }
-    
-                    // bullet is gone
                     shoot[i].active = false;
+                    gDamageFlashTimer = 20;
     
-                    // death check
                     if (player.health <= 0) {
                         gState = GAMEOVER;
                         return;
@@ -1034,20 +1029,28 @@ static void DrawGame(void)
         }
     }
 
-    DrawText("Use WASD to move, arrows to aim, SPACE to shoot", 10, 10, 20, DARKGRAY);
-
+    // --- HUD BAR ---
+    int fontSize = 20;
+    int padding = 20;
+    int x = 10;
+    int y = 10;
     char buf[64];
+
     snprintf(buf, sizeof(buf), "Ammo: %d", player.ammo);
-    DrawText(buf, 10, 40, 20, DARKGRAY);
+    DrawText(buf, x, y, fontSize, SKYBLUE);
+    x += MeasureText(buf, fontSize) + padding;
 
     snprintf(buf, sizeof(buf), "Health: %d", player.health);
-    DrawText(buf, 10, 70, 20, DARKGRAY);
+    DrawText(buf, x, y, fontSize, RED);
+    x += MeasureText(buf, fontSize) + padding;
 
-    snprintf(buf, sizeof(buf), "Currency: %d", player.currency);
-    DrawText(buf, 10, 100, 20, DARKGRAY);
-    
+    snprintf(buf, sizeof(buf), "Credits: %d", player.currency);
+    DrawText(buf, x, y, fontSize, GOLD);
+    x += MeasureText(buf, fontSize) + padding;
+
     snprintf(buf, sizeof(buf), "Floor: %d", gFloor);
-    DrawText(buf, 10, 130, 20, DARKGRAY);
+    DrawText(buf, x, y, fontSize, RAYWHITE);
+
 
     // draw boss HP bar (first active boss we find)
     for (int i = 0; i < MAX_ENEMIES; i++) {
@@ -1066,107 +1069,189 @@ static void DrawGame(void)
         }
     }
 
+    if (gDamageFlashTimer > 0) {
+        // fade out alpha (start strong red → transparent)
+        float alpha = (float)gDamageFlashTimer / 20.0f; 
+        DrawRectangle(0, 0, gScreenWidth, gScreenHeight, Fade(RED, alpha * 0.5f));
+        gDamageFlashTimer--;
+    }
+
     EndDrawing();
 }
 
 static void DrawMapCurrentRoom(void)
 {
-    
-    // for now just draw the earthMap
+    int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
+
     for (int y = 0; y < MAP_HEIGHT; y++) {
         for (int x = 0; x < MAP_WIDTH; x++) {
+            int t = currentMap[y][x];
             float tileX = (float)(x * TILE_SIZE);
             float tileY = (float)(y * TILE_SIZE);
             Rectangle tile = { tileX, tileY, (float)TILE_SIZE, (float)TILE_SIZE };
-            
-            int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
-            int t = currentMap[y][x];
-            if (t == 1) {
-                DrawRectangleRec(tile, (Color){30, 30, 40, 255});
-            } else if (t == 2) {
-                DrawRectangleRec(tile, (Color){0, 230, 255, 180});
-                DrawRectangleLinesEx(tile, 2, WHITE);
-            } else {
-                DrawRectangleRec(tile, (Color){10, 15, 25, 255});
+
+            // base colors
+            Color wallColor   = (Color){ 74, 56, 42, 255 };   
+            Color floorColor  = (Color){ 46, 82, 53, 255 };   
+            Color exitColor   = (Color){ 30, 180, 210, 200 }; 
+
+            switch (t)
+            {
+                case 1: 
+                    DrawRectangleRec(tile, wallColor);
+                    DrawRectangleLinesEx(tile, 2, BLACK);
+                    break;
+                case 2: 
+                    DrawRectangleRec(tile, exitColor);
+                    DrawRectangleLinesEx(tile, 2, RAYWHITE);
+                    break;
+                default:
+                    DrawRectangleRec(tile, floorColor);
+                    break;
             }
         }
     }
 
-    // Draw Key 
+    // Draw key on top if needed
     if (!gHasKey) {
         DrawCircleV(gKeyPos, gKeyRadius, GOLD);
         DrawCircleLines(gKeyPos.x, gKeyPos.y, gKeyRadius, RAYWHITE);
     }
 }
 
+
+
 static void DrawPlayer(const Player& player)
 {
-    // body
-    DrawRectangleRec(player.rec, player.color);
+    // sprite sheet info
+    int cols = 2;
+    int rows = 2;
+    float frameW = (float)tigerShip.width  / cols;
+    float frameH = (float)tigerShip.height / rows;
 
-    float tipLen = 10.0f;
-    float halfH  = player.rec.height / 2.0f;
-    float halfW  = player.rec.width  / 2.0f;
-
-    Vector2 p1, p2, p3;
+    // pick frame based on facing
+    int sx = 0;
+    int sy = 0;
+    // flipped UP/DOWN
     switch (player.facing)
     {
-        case RIGHT:
-            p1 = { player.rec.x + player.rec.width + tipLen, player.rec.y + halfH };
-            p2 = { player.rec.x + player.rec.width, player.rec.y };
-            p3 = { player.rec.x + player.rec.width, player.rec.y + player.rec.height };
-            break;
-        case LEFT:
-            p1 = { player.rec.x - tipLen, player.rec.y + halfH };
-            p2 = { player.rec.x, player.rec.y };
-            p3 = { player.rec.x, player.rec.y + player.rec.height };
-            break;
-        case UP:
-            p1 = { player.rec.x + halfW, player.rec.y - tipLen };
-            p2 = { player.rec.x, player.rec.y };
-            p3 = { player.rec.x + player.rec.width, player.rec.y };
-            break;
-        case DOWN:
-            p1 = { player.rec.x + halfW, player.rec.y + player.rec.height + tipLen };
-            p2 = { player.rec.x, player.rec.y + player.rec.height };
-            p3 = { player.rec.x + player.rec.width, player.rec.y + player.rec.height };
-            break;
+        case UP:    sx = 0; sy = 1; break;
+        case RIGHT: sx = 1; sy = 0; break;
+        case DOWN:  sx = 0; sy = 0; break;
+        case LEFT:  sx = 1; sy = 1; break;
     }
 
-    DrawTriangle(p1, p2, p3, YELLOW);
-    DrawTriangle(p1, p3, p2, YELLOW);
-}
+    Rectangle src = {
+        sx * frameW,
+        sy * frameH,
+        frameW,
+        frameH
+    };
 
+    // draw bigger than hitbox, but keep hitbox the same
+    float visualScale = 2.0f;   // tweak this
+    float visualW = player.rec.width  * visualScale;
+    float visualH = player.rec.height * visualScale;
+
+    Rectangle dest = {
+        player.rec.x + player.rec.width  / 2.0f - visualW / 2.0f,
+        player.rec.y + player.rec.height / 2.0f - visualH / 2.0f,
+        visualW,
+        visualH
+    };
+
+    DrawTexturePro(
+        tigerShip,
+        src,
+        dest,
+        (Vector2){0, 0},
+        0.0f,
+        RAYWHITE
+    );
+}
 
 
 static void DrawStation(void)
 {
     BeginDrawing();
-    ClearBackground((Color){5, 8, 20, 255});
+
+    // pick a background per level (placeholder)
+    Color bg = (Color){5, 8, 20, 255};
+    switch (gCurrentLevel) {
+        case EARTH:   bg = (Color){5, 8, 20, 255}; break;
+        case MARS:    bg = (Color){40, 10, 10, 255}; break;
+        case JUPITER: bg = (Color){40, 30, 10, 255}; break;
+        case SATURN:  bg = (Color){20, 20, 35, 255}; break;
+    }
+    ClearBackground(bg);
 
     DrawText("SPACE STATION: ORBITAL HUB", 40, 40, 30, RAYWHITE);
-    DrawText("1) Shop", 60, 100, 20, RAYWHITE);
-    DrawText("2) Launch Mission", 60, 130, 20, RAYWHITE);
+
+    const char *levelName = "EARTH";
+    bool levelLocked = false;
+    switch (gCurrentLevel) {
+        case EARTH:   levelName = "EARTH";   levelLocked = false; break;
+        case MARS:    levelName = "MARS (LOCKED)";    levelLocked = true;  break;
+        case JUPITER: levelName = "JUPITER (LOCKED)"; levelLocked = true;  break;
+        case SATURN:  levelName = "SATURN (LOCKED)";  levelLocked = true;  break;
+    }
+
+    DrawText("Select Planet:", 60, 90, 20, RAYWHITE);
+    DrawText(levelName, 60, 120, 28, GOLD);
+    DrawText("<- / -> to change", 60, 155, 18, GRAY);
+
+    DrawText("1) Shop", 60, 200, 20, RAYWHITE);
+    DrawText("2) Launch Mission", 60, 230, 20, levelLocked ? DARKGRAY : RAYWHITE);
 
     char buf[64];
     snprintf(buf, sizeof(buf), "Credits: %d", player.currency);
-    DrawText(buf, 60, 170, 20, GOLD);
+    DrawText(buf, 60, 270, 20, GOLD);
+
+    if (levelLocked) {
+        DrawText("This planet is locked. Only EARTH is playable right now.", 
+                 60, 305, 18, (Color){255, 200, 200, 255});
+    }
 
     EndDrawing();
 }
 
+
 static void UpdateStation(void)
 {
+    // cycle left
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+        if (gCurrentLevel == EARTH)
+            gCurrentLevel = SATURN;
+        else
+            gCurrentLevel = (Levels)(gCurrentLevel - 1);
+    }
+
+    // cycle right
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+        if (gCurrentLevel == SATURN)
+            gCurrentLevel = EARTH;
+        else
+            gCurrentLevel = (Levels)(gCurrentLevel + 1);
+    }
+
+    // shop still works
     if (IsKeyPressed(KEY_ONE)) {
         gState = SHOP;
     }
+
     if (IsKeyPressed(KEY_TWO)) {
-        gState = INSTRUCTIONS;
+        if (gCurrentLevel == EARTH) {
+            gState = INSTRUCTIONS;
+        } else {
+            // later: show "locked"
+        }
     }
-    if(IsKeyPressed(KEY_ESCAPE)) {
+
+    if (IsKeyPressed(KEY_ESCAPE)) {
         gState = START;
     }
 }
+
 
 static void UpdateShop(void)
 {
@@ -1192,12 +1277,13 @@ static void UpdateShop(void)
     if (IsKeyPressed(KEY_THREE)) {
         int cost = 15;
         if (player.currency >= cost) {
-            player.currency -= cost;
-            if (gBulletSpeed < 15) {
-                gBulletSpeed += 1;
+            if (gPlayerBulletSpeed < 15) {
+                player.currency -= cost;
+                gPlayerBulletSpeed += 1;
             }
         }
     }
+
 
     if (IsKeyPressed(KEY_FOUR)) {
         int cost = 20;
@@ -1230,7 +1316,7 @@ static void DrawShop(void)
     snprintf(buf, sizeof(buf), "Ammo: %d", player.ammo);
     DrawText(buf, 60, 270, 20, RAYWHITE);
 
-    snprintf(buf, sizeof(buf), "Bullet speed: %d", gBulletSpeed);
+    snprintf(buf, sizeof(buf), "Bullet speed: %d", gPlayerBulletSpeed);
     DrawText(buf, 60, 300, 20, RAYWHITE);
 
     snprintf(buf, sizeof(buf), "Fire delay: %d (lower = faster)", gFireDelay);
@@ -1246,6 +1332,7 @@ static void UpdatePause(void)
     }
 
     if (IsKeyPressed(KEY_ENTER)) {
+        ResetToFloor1KeepMoney();
         gState = STATION;
     }
 }
@@ -1379,4 +1466,3 @@ static void DrawStart(void)
 
     EndDrawing();
 }
-
