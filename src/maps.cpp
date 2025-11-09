@@ -145,10 +145,31 @@ static int earthMap5[MAP_HEIGHT][MAP_WIDTH] = {
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
 };
-
+static int marsMap0[MAP_HEIGHT][MAP_WIDTH] = {
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,3,0,0,1,0,0,1,1,1,0,0,1,1,0,4,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,1,0,0,0,0,0,0,8,1,1,0,0,0,0,0,0,0,0,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,1,1,5,1,1,1,5,1,1,1,5,1,1,1,5,1,1,1,1,1,1,1},
+    {1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,1,1,1,1,1,0,4,0,0,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,1,0,4,0,0,1},
+    {1,0,0,0,0,0,0,4,0,0,4,0,0,0,0,4,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
+    {1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,10,0,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+};
 
 // array of map pointers
-static int (*maps[MAP_COUNT])[MAP_WIDTH] = {
+// EARTH maps
+static int (*earthMaps[MAP_COUNT])[MAP_WIDTH] = {
     earthMap0,
     earthMap1,
     earthMap2,
@@ -157,18 +178,40 @@ static int (*maps[MAP_COUNT])[MAP_WIDTH] = {
     earthMap5,
 };
 
+// MARS maps
+static int (*marsMaps[MAP_COUNT])[MAP_WIDTH] = {
+    marsMap0,
+};
+
+extern Levels gCurrentLevel;
 int (*GetMapByIndex(int index))[MAP_WIDTH]
 {
     if (index < 0) index = 0;
     if (index >= MAP_COUNT) index = MAP_COUNT - 1;
-    return maps[index];
+
+    switch (gCurrentLevel)
+    {
+        case EARTH:
+            return earthMaps[index];
+        case MARS:
+            return marsMaps[index];
+        default:
+            return earthMaps[index];
+    }
 }
 
 int (*GetMapForFloor(int floor))[MAP_WIDTH]
 {
-    // cycle through maps by floor number
-    int idx = (floor - 1) % MAP_COUNT;   // floors start at 1 in your game
-    return GetMapByIndex(idx);
+    int idx = (floor - 1) % MAP_COUNT;
+
+    switch (gCurrentLevel) {
+        case EARTH:
+            return earthMaps[idx];
+        case MARS:
+            return marsMaps[idx];
+        default:
+            return earthMaps[idx];
+    }
 }
 
 // Silence error

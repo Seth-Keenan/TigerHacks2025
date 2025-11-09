@@ -10,7 +10,6 @@
 #define MAP_HEIGHT  23
 #define MAX_ROOMS_PER_FLOOR 8
 
-// if you want to expose these enums to other files later, keep them here
 typedef enum {
     STATION,
     SHOP,
@@ -19,7 +18,9 @@ typedef enum {
     PAUSE,
     QUIT,
     INSTRUCTIONS,
-    START
+    START,
+    STORY_EARTH,
+    WIN_EARTH,
 } GameState;
 
 // optional, but you already had it
@@ -29,6 +30,8 @@ typedef enum {
     JUPITER,
     SATURN
 } Levels;
+
+extern Levels gCurrentLevel;
 
 // init all game state
 void InitGame(int screenWidth, int screenHeight);

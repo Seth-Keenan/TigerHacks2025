@@ -176,11 +176,15 @@ class BouncerEnemy {
 };
 
 static Texture2D spaceTiger;
-static Texture2D tigerShip;
 static Texture2D earthCutout;
 static Texture2D marsCutout;
 static Texture2D jupiterCutout;
 static Texture2D saturnCutout;
+static Texture2D trumanPortrait;
+
+// Sprites
+static Texture2D tigerShip;
+static Texture2D earthBouncer;
 
 static int gScreenWidth  = 800;
 static int gScreenHeight = 600;
@@ -227,11 +231,17 @@ static void UpdateInstructions(void);
 static void DrawInstructions(void);
 static void UpdateStart(void);
 static void DrawStart(void);
+static void UpdateWinEarth(void);
+static void DrawWinEarth(void);
+static void UpdateStoryEarth(void);
+static void DrawStoryEarth(void);
 static bool IsTileSolid(int tx, int ty);
 static bool GetRandomFreeTilePos(float *outX, float *outY);
 static bool FindTileOfType(int tileValue, float *outX, float *outY);
 static void ResetToFloor1KeepMoney(void);
-static Levels gCurrentLevel = EARTH;
+static bool gMarsUnlocked = false;
+
+Levels gCurrentLevel = EARTH;
 
 static void HandlePickup(Pickup *p)
 {
@@ -277,6 +287,8 @@ void InitGame(int screenWidth, int screenHeight)
     marsCutout = LoadTexture("assets/marsnobg.png");
     jupiterCutout = LoadTexture("assets/jupiternobg.png");
     saturnCutout = LoadTexture("assets/saturnnobg.png");
+    trumanPortrait = LoadTexture("assets/trumanportrait.png");
+    earthBouncer = LoadTexture("assets/earthslime.png");
     gState = START;
 }
 
@@ -303,6 +315,12 @@ void GameUpdateDraw(void)
             break;
         case INSTRUCTIONS:
             UpdateInstructions();
+            break;
+        case WIN_EARTH:
+            UpdateWinEarth();
+            break;
+        case STORY_EARTH:
+            UpdateStoryEarth();
             break;
         case GAMEOVER:
             if (IsKeyPressed(KEY_ENTER)) {
@@ -333,6 +351,12 @@ void GameUpdateDraw(void)
         case INSTRUCTIONS:
             DrawInstructions();
             break;
+        case WIN_EARTH:
+            DrawWinEarth();
+            break;
+        case STORY_EARTH:
+            DrawStoryEarth();
+            break;
         case GAMEOVER:
             BeginDrawing();
             ClearBackground(BLACK);
@@ -348,7 +372,6 @@ void GameUpdateDraw(void)
     }
 }
 
-
 void GameUnload(void)
 {
     UnloadTexture(spaceTiger);
@@ -357,6 +380,8 @@ void GameUnload(void)
     UnloadTexture(marsCutout);
     UnloadTexture(jupiterCutout);
     UnloadTexture(saturnCutout);
+    UnloadTexture(trumanPortrait);
+    UnloadTexture(earthBouncer);
 }
 
 // Enemy helper
@@ -546,10 +571,12 @@ static void InitMission(void)
 
             // 4 = bouncer
             if (t == 4) {
-                enemies[enemyIndex].rec.x = x * TILE_SIZE + (TILE_SIZE - 20) * 0.5f;
-                enemies[enemyIndex].rec.y = y * TILE_SIZE + (TILE_SIZE - 20) * 0.5f;
-                enemies[enemyIndex].rec.width  = 20;
-                enemies[enemyIndex].rec.height = 20;
+                float size = 20;
+                float verticalOffset = 6.0f;
+                enemies[enemyIndex].rec.x = x * TILE_SIZE + (TILE_SIZE - size) * 0.5f;
+                enemies[enemyIndex].rec.y = y * TILE_SIZE + (TILE_SIZE - size) * 0.5f + verticalOffset;
+                enemies[enemyIndex].rec.width  = size;
+                enemies[enemyIndex].rec.height = size;
                 enemies[enemyIndex].speed = {2, 2};
                 enemies[enemyIndex].color = RED;
                 enemies[enemyIndex].facing = DOWN;
@@ -735,14 +762,27 @@ static void UpdateGame(void)
     int ty = (int)(py / TILE_SIZE);
 
     if (gHasKey && !Map_IsTileSolid(currMap, tx, ty)) {
-        int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
-        int t = currentMap[ty][tx];
-        if (t == 2) {
+    int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
+    int t = currentMap[ty][tx];
+
+    if (t == 2) {
+        if (gCurrentLevel == EARTH && gFloor >= MAP_COUNT) {
+            gMarsUnlocked = true;
+
+            player.currency += 50;
+
+            gFloor = 1;
+            gHasKey = false;
+            gState = WIN_EARTH;
+        }
+        else {
             gFloor++;
             InitMission();
             player.currency += 5;
         }
     }
+}
+
 
     if (IsKeyDown(KEY_RIGHT)) player.facing = RIGHT;
     if (IsKeyDown(KEY_LEFT))  player.facing = LEFT;
@@ -766,6 +806,39 @@ static void UpdateGame(void)
     // enemies
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
+
+        bool isBoss   = enemies[i].isBoss;
+        bool isShooter= enemies[i].isShooter;
+
+        // bouncers are your tile-4 enemies: active, NOT shooter, NOT boss
+        bool isBouncer = (!isBoss && !isShooter && (fabsf(enemies[i].speed.x) > 0.0f || fabsf(enemies[i].speed.y) > 0.0f));
+
+        if (isBouncer && earthBouncer.id > 0) {
+            // scale factor (adjust as you like)
+            float baseScale = enemies[i].rec.width / (float)earthBouncer.width;
+            float scale = baseScale * 1.5f;   // bigger slime
+
+            // compute visual size in pixels
+            float texW = earthBouncer.width * scale;
+            float texH = earthBouncer.height * scale;
+
+            // center the sprite on the hitbox
+            float posX = enemies[i].rec.x + enemies[i].rec.width  / 2.0f - texW / 2.0f;
+            float posY = enemies[i].rec.y + enemies[i].rec.height / 2.0f - texH / 2.0f;
+
+            // optional fine-tune offset if still a pixel off
+            float yAdjust = -2.0f; // negative lifts upward, positive pushes down
+
+            DrawTextureEx(
+                earthBouncer,
+                (Vector2){ enemies[i].rec.x, enemies[i].rec.y + yAdjust },
+                0.0f,
+                scale,
+                RAYWHITE
+            );
+        } else {
+            DrawRectangleRec(enemies[i].rec, enemies[i].color);
+        }
 
         // shooter first
         if (enemies[i].isShooter && !enemies[i].isBoss) {
@@ -901,7 +974,8 @@ static void UpdateGame(void)
                     if (enemies[i].health <= 0) {
                         enemies[i].active = false;
                         player.currency += 50;   
-                        gHasKey = true;          
+                        gHasKey = true;
+                        gMarsUnlocked = true;          
                     }
                 } else {
                     enemies[i].active = false;
@@ -1046,10 +1120,31 @@ static void DrawGame(void)
     }
 
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (enemies[i].active) {
+    if (!enemies[i].active) continue;
+
+        bool isBoss    = enemies[i].isBoss;
+        bool isShooter = enemies[i].isShooter;
+
+        // bouncer = the tile-4 moving guys
+        bool isBouncer = (!isBoss && !isShooter &&
+                        (fabsf(enemies[i].speed.x) > 0.0f || fabsf(enemies[i].speed.y) > 0.0f));
+
+        if (isBouncer && earthBouncer.id > 0) {
+            // scale sprite to enemy box (usually 20x20)
+            float scale = (enemies[i].rec.width / (float)earthBouncer.width) * 2.0f;
+            DrawTextureEx(
+                earthBouncer,
+                (Vector2){ enemies[i].rec.x, enemies[i].rec.y },
+                0.0f,
+                scale,
+                RAYWHITE
+            );
+        } else {
+            // shooters & boss stay rectangles for now
             DrawRectangleRec(enemies[i].rec, enemies[i].color);
         }
     }
+
 
     // --- HUD BAR ---
     int fontSize = 20;
@@ -1105,6 +1200,43 @@ static void DrawMapCurrentRoom(void)
 {
     int (*currentMap)[MAP_WIDTH] = GetCurrentMap();
 
+    // --- Base color palette depends on current planet ---
+    Color wallColor, floorColor, exitColor;
+
+    switch (gCurrentLevel)
+    {
+        case EARTH:
+            wallColor  = (Color){ 74, 56, 42, 255 };   // brown stone walls
+            floorColor = (Color){ 46, 82, 53, 255 };   // green ground
+            exitColor  = (Color){ 30, 180, 210, 200 }; // teal portal
+            break;
+
+        case MARS:
+            wallColor  = (Color){ 100, 40, 30, 255 };  // rusty red rock
+            floorColor = (Color){ 70, 35, 25, 255 };   // darker red soil
+            exitColor  = (Color){ 255, 100, 50, 200 }; // orange portal glow
+            break;
+
+        case JUPITER:
+            wallColor  = (Color){ 110, 90, 50, 255 };  // tan clouds
+            floorColor = (Color){ 80, 60, 40, 255 };
+            exitColor  = (Color){ 240, 210, 80, 200 };
+            break;
+
+        case SATURN:
+            wallColor  = (Color){ 70, 70, 100, 255 };  // dark purple tones
+            floorColor = (Color){ 50, 50, 80, 255 };
+            exitColor  = (Color){ 150, 120, 255, 200 };
+            break;
+
+        default:
+            wallColor  = DARKGRAY;
+            floorColor = GRAY;
+            exitColor  = SKYBLUE;
+            break;
+    }
+
+    // --- Draw the tiles ---
     for (int y = 0; y < MAP_HEIGHT; y++) {
         for (int x = 0; x < MAP_WIDTH; x++) {
             int t = currentMap[y][x];
@@ -1112,50 +1244,42 @@ static void DrawMapCurrentRoom(void)
             float tileY = (float)(y * TILE_SIZE);
             Rectangle tile = { tileX, tileY, (float)TILE_SIZE, (float)TILE_SIZE };
 
-            // base colors
-            Color wallColor   = (Color){ 74, 56, 42, 255 };   
-            Color floorColor  = (Color){ 46, 82, 53, 255 };   
-            Color exitColor   = (Color){ 30, 180, 210, 200 }; 
-
             switch (t)
             {
-                case 1: 
+                case 1: // wall
                     DrawRectangleRec(tile, wallColor);
                     DrawRectangleLinesEx(tile, 2, BLACK);
                     break;
-                case 2:
+
+                case 2: // teleporter
                     if (gHasKey) {
-                        // active teleporter
                         DrawRectangleRec(tile, exitColor);
                         DrawRectangleLinesEx(tile, 2, RAYWHITE);
                     } else {
-                        // inactive / grayed out teleporter
-                        Color off = (Color){120, 120, 130, 180};
+                        Color off = Fade(exitColor, 0.4f);
                         DrawRectangleRec(tile, off);
                         DrawRectangleLinesEx(tile, 2, DARKGRAY);
-                        // optional little “lock” bar
                         DrawRectangle(tile.x + tile.width*0.25f,
-                                    tile.y + tile.height*0.4f,
-                                    tile.width*0.5f,
-                                    4,
-                                    (Color){30,30,40,255});
+                                      tile.y + tile.height*0.4f,
+                                      tile.width*0.5f,
+                                      4,
+                                      (Color){30,30,40,255});
                     }
                     break;
-                default:
+
+                default: // floor
                     DrawRectangleRec(tile, floorColor);
                     break;
             }
         }
     }
 
-    // Draw key on top if needed
+    // --- Draw the key if not yet collected ---
     if (!gHasKey) {
         DrawCircleV(gKeyPos, gKeyRadius, GOLD);
         DrawCircleLines(gKeyPos.x, gKeyPos.y, gKeyRadius, RAYWHITE);
     }
 }
-
-
 
 static void DrawPlayer(const Player& player)
 {
@@ -1184,8 +1308,7 @@ static void DrawPlayer(const Player& player)
         frameH
     };
 
-    // draw bigger than hitbox, but keep hitbox the same
-    float visualScale = 2.0f;   // tweak this
+    float visualScale = 2.0f;
     float visualW = player.rec.width  * visualScale;
     float visualH = player.rec.height * visualScale;
 
@@ -1248,9 +1371,15 @@ static void DrawStation(void)
         }
         break;
 
-        case MARS:    
-        levelName = "MARS (LOCKED)";    
-        levelLocked = true;
+        case MARS:
+        if (gMarsUnlocked) {
+            levelName = "MARS";
+            levelLocked = false;
+        } else {
+            levelName = "MARS (LOCKED)";
+            levelLocked = true;
+        }    
+        
         if (marsCutout.id > 0) 
         {
             float marsScale = 1.3f;
@@ -1327,8 +1456,15 @@ static void DrawStation(void)
     DrawText(buf, 60, 270, 20, GOLD);
 
     if (levelLocked) {
-        DrawText("This planet is locked. Only EARTH is playable right now.", 
-                 60, 305, 18, (Color){255, 200, 200, 255});
+        if (gCurrentLevel == MARS) {
+            // locked because Mars not unlocked yet
+            DrawText("This planet is locked. Beat Earth boss to unlock Mars.", 
+                    60, 305, 18, (Color){255, 200, 200, 255});
+        } else {
+            // generic locked text for other planets
+            DrawText("This planet is locked. Only EARTH and MARS are playable right now.", 
+                    60, 305, 18, (Color){255, 200, 200, 255});
+        }
     }
 
     EndDrawing();
@@ -1359,12 +1495,16 @@ static void UpdateStation(void)
     }
 
     if (IsKeyPressed(KEY_TWO)) {
-        if (gCurrentLevel == EARTH) {
-            gState = INSTRUCTIONS;
-        } else {
-            // later: show "locked"
-        }
+    if (gCurrentLevel == EARTH) {
+        gState = STORY_EARTH;
+    } else if (gCurrentLevel == MARS && gMarsUnlocked) {
+        gFloor = 1;
+        gState = INSTRUCTIONS;
+    } else {
+        // still locked, do nothing (or show a message later)
     }
+}
+
 
     if (IsKeyPressed(KEY_ESCAPE)) {
         gState = START;
@@ -1582,6 +1722,100 @@ static void DrawStart(void)
 
     DrawText("Press ENTER to start", gScreenWidth/2 - 130, 160, 24, GOLD);
     DrawText("Press ESC to quit",   gScreenWidth/2 - 100, 195, 20, GRAY);
+
+    EndDrawing();
+}
+
+static void UpdateWinEarth(void)
+{
+    // ENTER -> station
+    if (IsKeyPressed(KEY_ENTER)) {
+        gState = STATION;
+    }
+    // ESC -> station too, why not
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        gState = STATION;
+    }
+}
+
+static void DrawWinEarth(void)
+{
+    BeginDrawing();
+    ClearBackground((Color){8, 10, 20, 255});
+
+    // Title
+    DrawText("MISSION COMPLETE", 120, 80, 40, GOLD);
+
+    // Narrative line — short story moment
+    DrawText("Pilot Truman has once again saved a fellow student", 100, 140, 22, RAYWHITE);
+    DrawText("from the clutches of the evil cosmic beast!", 140, 170, 22, RAYWHITE);
+
+    // Unlock message
+    if (gMarsUnlocked) {
+        DrawText("New destination unlocked: MARS", 130, 210, 22, ORANGE);
+    }
+
+    // Stats & reward line
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Credits Earned: %d", player.currency);
+    DrawText(buf, 130, 250, 20, GOLD);
+
+    DrawText("Press ENTER to return to Station", 130, 300, 20, GRAY);
+
+    // Optional: celebratory sparkle overlay
+    float pulse = (sinf(GetTime() * 2.0f) + 1.0f) * 0.5f;
+    Color flash = Fade(GOLD, 0.3f + 0.3f * pulse);
+    DrawRectangle(0, 0, gScreenWidth, gScreenHeight, flash);
+
+    EndDrawing();
+}
+
+static void UpdateStoryEarth(void)
+{
+    // ENTER or SPACE moves to the instructions/tutorial screen
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+        gState = INSTRUCTIONS;
+    }
+    // ESC cancels back to the station
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        gState = STATION;
+    }
+}
+
+static void DrawStoryEarth(void)
+{
+    BeginDrawing();
+    ClearBackground((Color){6, 9, 20, 255}); // deep space blue
+
+    DrawText("EARTH: THE FIRST RESCUE", gScreenWidth/2 - 190, 60, 32, GOLD);
+
+    int x = 80;
+    int y = 130;
+    int line = 30;
+
+    DrawText("Pilot Truman has set course for Earth,", x, y, 22, RAYWHITE);
+    DrawText("where a group of students are trapped", x, y + line, 22, RAYWHITE);
+    DrawText("in the ruins of an abandoned academy.", x, y + line*2, 22, RAYWHITE);
+
+    DrawText("Reports speak of an evil cosmic beast", x, y + line*4, 22, RED);
+    DrawText("lurking beneath the surface, feeding on fear.", x, y + line*5, 22, RAYWHITE);
+
+    DrawText("Armed with courage, credits, and caffeine,", x, y + line*7, 22, RAYWHITE);
+    DrawText("Truman descends through the atmosphere...", x, y + line*8, 22, RAYWHITE);
+
+    DrawText("Press ENTER to begin your mission.", gScreenWidth/2 - 200, y + line*10, 20, GRAY);
+
+    if (trumanPortrait.id > 0)
+    {
+        float scale = 0.25f;
+        float texW = trumanPortrait.width * scale;
+        float texH = trumanPortrait.height * scale;
+
+        float posX = gScreenWidth - texW - 20;
+        float posY = gScreenHeight - texH - 20;
+
+        DrawTextureEx(trumanPortrait, (Vector2){ posX, posY }, 0.0f, scale, RAYWHITE);
+    }
 
     EndDrawing();
 }
