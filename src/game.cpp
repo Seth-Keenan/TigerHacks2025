@@ -538,8 +538,8 @@ static void InitMission(void)
     // Player Spawn
     float sx, sy;
     if (Map_FindTile(currMap, 3, &sx, &sy)) {
-        player.rec.x = sx;
-        player.rec.y = sy;
+        player.rec.x = sx - player.rec.width  * 0.5f;
+        player.rec.y = sy - player.rec.height * 0.5f;
     } else {
         player.rec.x = 90;
         player.rec.y = 60;
@@ -576,8 +576,8 @@ static void InitMission(void)
     {
         float fx, fy;
         if (Map_GetRandomFreeTile(currMap, &fx, &fy)) {
-            pickups[i].position.x = fx + 10.0f;  // center it nicer
-            pickups[i].position.y = fy + 10.0f;
+            pickups[i].position.x = fx;  // center it nicer
+            pickups[i].position.y = fy;
         } else {
             pickups[i].position.x = 100;
             pickups[i].position.y = 100;
@@ -693,8 +693,6 @@ static void InitMission(void)
 
 static void ResetToFloor1KeepMoney(void)
 {
-    int savedMoney = player.currency;
-
     gFloor = 1;
     gHasKey = false;
     // If player had bought health upgrades, don't reset below 3
@@ -705,9 +703,6 @@ static void ResetToFloor1KeepMoney(void)
         player.ammo = 50;
     }
     player.iframes = 0;
-    gFireDelay   = 20;
-
-    player.currency = savedMoney;
 
     InitMission();
 
@@ -1829,12 +1824,12 @@ static void DrawInstructions(void)
     DrawText("WASD  - Move your ship", x, y, 20, RAYWHITE);
     DrawText("Arrow Keys - Aim direction", x, y + line, 20, RAYWHITE);
     DrawText("SPACE - Shoot (uses ammo)", x, y + line*2, 20, RAYWHITE);
-    DrawText("Collect BLUE for ammo", x, y + line*3, 20, SKYBLUE);
-    DrawText("Collect YELLOW for money", x, y + line*4, 20, YELLOW);
-    DrawText("Get the GOLD key to use the teleporter", x, y + line*5, 20, GOLD);
+    DrawText("Collect BULLETS for ammo", x, y + line*3, 20, SKYBLUE);
+    DrawText("Collect COINS for money", x, y + line*4, 20, YELLOW);
+    DrawText("Get the golden KEY to use the teleporter", x, y + line*5, 20, GOLD);
     DrawText("Avoid RED bullets and enemies!", x, y + line*6, 20, RED);
     DrawText("If you run out of HP,", x, y + line*7, 20, RAYWHITE);
-    DrawText("you restart at Floor 1 with only your money!", x, y + line*8, 20, RAYWHITE);
+    DrawText("you restart at Floor 1 with your money and perks!", x, y + line*8, 20, RAYWHITE);
     DrawText("Press ENTER to begin your mission", gScreenWidth/2 - 180, y + line*10, 20, GRAY);
 
     EndDrawing();
@@ -1921,7 +1916,7 @@ static void DrawWinEarth(void)
     DrawText("MISSION COMPLETE", 120, 80, 40, GOLD);
 
     // Narrative line — short story moment
-    DrawText("Pilot Truman has once again saved a students", 100, 140, 22, RAYWHITE);
+    DrawText("Pilot Truman has once again saved the students", 100, 140, 22, RAYWHITE);
     DrawText("from the clutches of the evil cosmic squirrels!", 140, 170, 22, RAYWHITE);
 
     // Unlock message
