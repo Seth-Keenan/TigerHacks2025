@@ -576,7 +576,7 @@ static void InitMission(void)
     {
         float fx, fy;
         if (Map_GetRandomFreeTile(currMap, &fx, &fy)) {
-            pickups[i].position.x = fx;  // center it nicer
+            pickups[i].position.x = fx;
             pickups[i].position.y = fy;
         } else {
             pickups[i].position.x = 100;
