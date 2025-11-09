@@ -7,7 +7,7 @@
 #define MAP_WIDTH   25
 #define MAP_HEIGHT  23
 
-#define MAP_COUNT  8
+#define MAP_COUNT  6
 
 int (*GetMapByIndex(int index))[MAP_WIDTH];
 int (*GetMapForFloor(int floor))[MAP_WIDTH];

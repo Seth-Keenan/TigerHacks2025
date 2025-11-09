@@ -177,6 +177,10 @@ class BouncerEnemy {
 
 static Texture2D spaceTiger;
 static Texture2D tigerShip;
+static Texture2D earthCutout;
+static Texture2D marsCutout;
+static Texture2D jupiterCutout;
+static Texture2D saturnCutout;
 
 static int gScreenWidth  = 800;
 static int gScreenHeight = 600;
@@ -269,6 +273,10 @@ void InitGame(int screenWidth, int screenHeight)
     InitPlayerOnce();
     spaceTiger = LoadTexture("assets/tigerinspace.png");
     tigerShip = LoadTexture("assets/tigerinship.png");
+    earthCutout = LoadTexture("assets/earthnobg.png");
+    marsCutout = LoadTexture("assets/marsnobg.png");
+    jupiterCutout = LoadTexture("assets/jupiternobg.png");
+    saturnCutout = LoadTexture("assets/saturnnobg.png");
     gState = START;
 }
 
@@ -328,7 +336,13 @@ void GameUpdateDraw(void)
         case GAMEOVER:
             BeginDrawing();
             ClearBackground(BLACK);
-            DrawText("GAME OVER - press ENTER for station", 80, 200, 20, RAYWHITE);
+            if (player.ammo <= 0)
+                DrawText("GAME OVER - Out of Ammo! Press ENTER for station", 80, 200, 20, RAYWHITE);
+            else if (player.health <= 0)
+                 DrawText("GAME OVER - You Died! Press ENTER for station", 80, 200, 20, RAYWHITE);
+            else {
+                DrawText("GAME OVER - press ENTER for station", 80, 200, 20, RAYWHITE);
+            }
             EndDrawing();
             break;
     }
@@ -339,6 +353,10 @@ void GameUnload(void)
 {
     UnloadTexture(spaceTiger);
     UnloadTexture(tigerShip);
+    UnloadTexture(earthCutout);
+    UnloadTexture(marsCutout);
+    UnloadTexture(jupiterCutout);
+    UnloadTexture(saturnCutout);
 }
 
 // Enemy helper
@@ -537,6 +555,7 @@ static void InitMission(void)
                 enemies[enemyIndex].facing = DOWN;
                 enemies[enemyIndex].active = true;
                 enemies[enemyIndex].isShooter = false;
+                enemies[enemyIndex].isBoss = false;
                 enemies[enemyIndex].shootTimer = 0;
                 enemyIndex++;
             }
@@ -551,6 +570,7 @@ static void InitMission(void)
                 enemies[enemyIndex].color = (Color){200, 80, 40, 255};
                 enemies[enemyIndex].active = true;
                 enemies[enemyIndex].isShooter = true;
+                enemies[enemyIndex].isBoss = false;
                 enemies[enemyIndex].shootTimer = 180;
 
                 switch (t) {
@@ -600,7 +620,9 @@ static void ResetToFloor1KeepMoney(void)
     if (player.health < 3) {
         player.health = 3;
     }
-    player.ammo   = 50;
+    if (player.ammo < 50) {
+        player.ammo = 50;
+    }
     player.iframes = 0;
     gFireDelay   = 20;
 
@@ -1101,9 +1123,23 @@ static void DrawMapCurrentRoom(void)
                     DrawRectangleRec(tile, wallColor);
                     DrawRectangleLinesEx(tile, 2, BLACK);
                     break;
-                case 2: 
-                    DrawRectangleRec(tile, exitColor);
-                    DrawRectangleLinesEx(tile, 2, RAYWHITE);
+                case 2:
+                    if (gHasKey) {
+                        // active teleporter
+                        DrawRectangleRec(tile, exitColor);
+                        DrawRectangleLinesEx(tile, 2, RAYWHITE);
+                    } else {
+                        // inactive / grayed out teleporter
+                        Color off = (Color){120, 120, 130, 180};
+                        DrawRectangleRec(tile, off);
+                        DrawRectangleLinesEx(tile, 2, DARKGRAY);
+                        // optional little “lock” bar
+                        DrawRectangle(tile.x + tile.width*0.25f,
+                                    tile.y + tile.height*0.4f,
+                                    tile.width*0.5f,
+                                    4,
+                                    (Color){30,30,40,255});
+                    }
                     break;
                 default:
                     DrawRectangleRec(tile, floorColor);
@@ -1190,10 +1226,93 @@ static void DrawStation(void)
     const char *levelName = "EARTH";
     bool levelLocked = false;
     switch (gCurrentLevel) {
-        case EARTH:   levelName = "EARTH";   levelLocked = false; break;
-        case MARS:    levelName = "MARS (LOCKED)";    levelLocked = true;  break;
-        case JUPITER: levelName = "JUPITER (LOCKED)"; levelLocked = true;  break;
-        case SATURN:  levelName = "SATURN (LOCKED)";  levelLocked = true;  break;
+        case EARTH:   
+        levelName = "EARTH";   
+        levelLocked = false; 
+        if (earthCutout.id > 0) 
+        {
+            float earthScale = 1.3f;
+            float texW = earthCutout.width * earthScale;
+            float texH = earthCutout.height * earthScale;
+            float yOffset = sinf(GetTime() * 2.0f) * 5.0f;
+
+            DrawTextureEx(
+                earthCutout,
+                (Vector2){
+                    gScreenWidth/2.0f - texW/2.0f, yOffset + 180
+                },
+                0.0f,
+                earthScale,
+                RAYWHITE
+            );
+        }
+        break;
+
+        case MARS:    
+        levelName = "MARS (LOCKED)";    
+        levelLocked = true;
+        if (marsCutout.id > 0) 
+        {
+            float marsScale = 1.3f;
+            float texW = marsCutout.width * marsScale;
+            float texH = marsCutout.height * marsScale;
+            float yOffset = sinf(GetTime() * 2.0f) * 5.0f;
+
+            DrawTextureEx(
+                marsCutout,
+                (Vector2){
+                    gScreenWidth/2.0f - texW/2.0f, yOffset + 180
+                },
+                0.0f,
+                marsScale,
+                RAYWHITE
+            );
+        }  
+        break;
+
+        case JUPITER: 
+        levelName = "JUPITER (LOCKED)"; 
+        levelLocked = true;  
+        if(jupiterCutout.id > 0) 
+        {
+            float jupiterScale = 1.3f;
+            float texW = jupiterCutout.width * jupiterScale;
+            float texH = jupiterCutout.height * jupiterScale;
+            float yOffset = sinf(GetTime() * 2.0f) * 5.0f;
+
+            DrawTextureEx(
+                jupiterCutout,
+                (Vector2){
+                    gScreenWidth/2.0f - texW/2.0f, yOffset + 180
+                },
+                0.0f,
+                jupiterScale,
+                RAYWHITE
+            );
+        }
+        break;
+        
+        case SATURN:  
+        levelName = "SATURN (LOCKED)";  
+        levelLocked = true;
+        if (saturnCutout.id > 0) 
+        {
+            float saturnScale = 1.3f;
+            float texW = saturnCutout.width * saturnScale;
+            float texH = saturnCutout.height * saturnScale;
+            float yOffset = sinf(GetTime() * 2.0f) * 5.0f;
+
+            DrawTextureEx(
+                saturnCutout,
+                (Vector2){
+                    gScreenWidth/2.0f - texW/2.0f, yOffset + 110
+                },
+                0.0f,
+                saturnScale,
+                RAYWHITE
+            );
+        }  
+        break;
     }
 
     DrawText("Select Planet:", 60, 90, 20, RAYWHITE);
